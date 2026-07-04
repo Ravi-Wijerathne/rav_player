@@ -57,6 +57,7 @@ xcrun swiftc \
     "$MACOS_DIR/rav_player/rav_playerApp.swift" \
     "$MACOS_DIR/rav_player/ContentView.swift" \
     "$MACOS_DIR/rav_player/PlayerView.swift" \
+    "$MACOS_DIR/rav_player/KeyboardShortcutManager.swift" \
     "$MACOS_DIR/rav_player/MetalVideoView.swift" \
     "$MACOS_DIR/rav_player/PlayerViewModel.swift" \
     -import-objc-header "$MACOS_DIR/RavPlayer-Bridging-Header.h" \

@@ -67,6 +67,7 @@ class MetalVideoNSView: NSView {
             if setupDone {
                 let w = Int(metalLayer.bounds.width * metalLayer.contentsScale)
                 let h = Int(metalLayer.bounds.height * metalLayer.contentsScale)
+                metalLayer.drawableSize = CGSize(width: CGFloat(w), height: CGFloat(h))
                 viewModel?.resizeMetal(width: Int32(w), height: Int32(h))
             } else if window != nil {
                 ensureMetalSetup()
