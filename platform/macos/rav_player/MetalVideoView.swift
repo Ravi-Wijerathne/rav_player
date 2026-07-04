@@ -44,6 +44,8 @@ class MetalVideoNSView: NSView {
         let h = Int(metalLayer.bounds.height * metalLayer.contentsScale)
         guard w > 0 && h > 0 else { return }
 
+        metalLayer.drawableSize = CGSize(width: CGFloat(w), height: CGFloat(h))
+
         if !setupDone {
             setupDone = true
             viewModel?.setupMetalLayer(metalLayer, width: w, height: h)

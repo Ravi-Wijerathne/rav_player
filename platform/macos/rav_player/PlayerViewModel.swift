@@ -56,6 +56,8 @@ class PlayerViewModel: ObservableObject {
 
     func loadMedia(url: URL) {
         currentURL = url.absoluteString
+        videoWidth = 0
+        videoHeight = 0
 
         if bridge.open(url.absoluteString) {
             isPlayable = true

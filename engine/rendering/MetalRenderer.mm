@@ -16,7 +16,10 @@ public:
     id<MTLLibrary> library = nil;
     id<MTLRenderPipelineState> pipelineState = nil;
     id<MTLRenderPipelineState> yuvPipelineState = nil;
-    id<MTLBuffer> vertexBuffer = nil;
+    id<MTLBuffer> vertexBuffer0 = nil;
+    id<MTLBuffer> vertexBuffer90 = nil;
+    id<MTLBuffer> vertexBuffer180 = nil;
+    id<MTLBuffer> vertexBuffer270 = nil;
     CAMetalLayer* metalLayer = nil;
     dispatch_semaphore_t inflightSemaphore = nil;
 
@@ -115,18 +118,48 @@ public:
     }
 
     void setupVertices() {
-        static const Vertex quad[] = {
+        static const Vertex quad0[] = {
             { .position = { -1.0,  -1.0 }, .texcoord = { 0.0, 1.0 } },
             { .position = {  1.0,  -1.0 }, .texcoord = { 1.0, 1.0 } },
             { .position = { -1.0,   1.0 }, .texcoord = { 0.0, 0.0 } },
             { .position = {  1.0,   1.0 }, .texcoord = { 1.0, 0.0 } },
         };
-        vertexBuffer = [device newBufferWithBytes:quad
-                                          length:sizeof(quad)
-                                         options:MTLResourceStorageModeShared];
+        vertexBuffer0 = [device newBufferWithBytes:quad0
+                                           length:sizeof(quad0)
+                                          options:MTLResourceStorageModeShared];
+
+        static const Vertex quad90[] = {
+            { .position = { -1.0,  -1.0 }, .texcoord = { 1.0, 1.0 } },
+            { .position = {  1.0,  -1.0 }, .texcoord = { 1.0, 0.0 } },
+            { .position = { -1.0,   1.0 }, .texcoord = { 0.0, 1.0 } },
+            { .position = {  1.0,   1.0 }, .texcoord = { 0.0, 0.0 } },
+        };
+        vertexBuffer90 = [device newBufferWithBytes:quad90
+                                            length:sizeof(quad90)
+                                           options:MTLResourceStorageModeShared];
+
+        static const Vertex quad180[] = {
+            { .position = { -1.0,  -1.0 }, .texcoord = { 1.0, 0.0 } },
+            { .position = {  1.0,  -1.0 }, .texcoord = { 0.0, 0.0 } },
+            { .position = { -1.0,   1.0 }, .texcoord = { 1.0, 1.0 } },
+            { .position = {  1.0,   1.0 }, .texcoord = { 0.0, 1.0 } },
+        };
+        vertexBuffer180 = [device newBufferWithBytes:quad180
+                                             length:sizeof(quad180)
+                                            options:MTLResourceStorageModeShared];
+
+        static const Vertex quad270[] = {
+            { .position = { -1.0,  -1.0 }, .texcoord = { 0.0, 0.0 } },
+            { .position = {  1.0,  -1.0 }, .texcoord = { 0.0, 1.0 } },
+            { .position = { -1.0,   1.0 }, .texcoord = { 1.0, 0.0 } },
+            { .position = {  1.0,   1.0 }, .texcoord = { 1.0, 1.0 } },
+        };
+        vertexBuffer270 = [device newBufferWithBytes:quad270
+                                             length:sizeof(quad270)
+                                            options:MTLResourceStorageModeShared];
     }
 
-    void render(id<MTLTexture> texture, bool isYUV) {
+    void render(id<MTLTexture> texture, bool isYUV, int rotation) {
         if (!ready) {
             static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but not ready");
             return;
@@ -186,7 +219,11 @@ public:
             }];
 
             [encoder setRenderPipelineState:ps];
-            [encoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+            id<MTLBuffer> vBuf = vertexBuffer0;
+            if (rotation == 90) vBuf = vertexBuffer90;
+            else if (rotation == 180) vBuf = vertexBuffer180;
+            else if (rotation == 270) vBuf = vertexBuffer270;
+            [encoder setVertexBuffer:vBuf offset:0 atIndex:0];
 
             Uniforms uniforms;
             [encoder setFragmentBytes:&uniforms length:sizeof(uniforms)
@@ -267,7 +304,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                  withBytes:frame_converter_.data()
                bytesPerRow:frame_converter_.linesize()];
 
-    impl_->render(texture, false);
+    impl_->render(texture, false, frame.rotation);
     return true;
 }
 

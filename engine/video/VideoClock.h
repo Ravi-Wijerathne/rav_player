@@ -10,6 +10,11 @@ class VideoClock {
 public:
     VideoClock() = default;
 
+    void start() {
+        real_clock_.start();
+        last_update_ = real_clock_.elapsed();
+    }
+
     void set_pts(double pts, double serial) {
         pts_ = pts;
         last_pts_ = pts_;
@@ -17,7 +22,13 @@ public:
         last_update_ = real_clock_.elapsed();
     }
 
-    double pts() const { return pts_.load(); }
+    double pts() const {
+        if (real_clock_.is_running()) {
+            double elapsed_since_update = real_clock_.elapsed() - last_update_;
+            return pts_ + elapsed_since_update;
+        }
+        return pts_;
+    }
 
     double serial() const { return serial_.load(); }
 
@@ -32,6 +43,14 @@ public:
         double elapsed_since_update = real_clock_.elapsed() - last_update_;
         double expected_pts = pts_ + elapsed_since_update;
         pts_.store(expected_pts);
+    }
+
+    void pause() {
+        real_clock_.pause();
+    }
+
+    void resume() {
+        real_clock_.resume();
     }
 
     void reset() {

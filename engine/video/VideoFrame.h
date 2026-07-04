@@ -23,6 +23,7 @@ struct VideoFrame {
     double duration{0.0};
     int width{0};
     int height{0};
+    int rotation{0};
     VideoFrameFormat format{VideoFrameFormat::Unknown};
     AVPixelFormat pix_fmt{AV_PIX_FMT_NONE};
     bool is_hardware{false};
