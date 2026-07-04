@@ -1,0 +1,65 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor and IDE settings
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# Build outputs
+build/
+cmake-build-*/
+out/
+debug/
+release/
+bin/
+dist/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+compile_commands.json
+Makefile
+install_manifest.txt
+
+# Compiled objects and binaries
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.app/
+*.pdb
+*.ilk
+*.idb
+*.d
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+
+# Clang and sanitizer artifacts
+.clangd/
+.cache/
+.sanitizers/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.pid

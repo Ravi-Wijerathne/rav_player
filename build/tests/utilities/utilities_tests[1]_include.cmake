@@ -1,5 +1,0 @@
-if(EXISTS "/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/utilities/utilities_tests[1]_tests.cmake")
-  include("/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/utilities/utilities_tests[1]_tests.cmake")
-else()
-  add_test(utilities_tests_NOT_BUILT utilities_tests_NOT_BUILT)
-endif()

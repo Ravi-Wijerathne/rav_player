@@ -1,5 +1,0 @@
-if(EXISTS "/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/decoder/decoder_tests[1]_tests.cmake")
-  include("/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/decoder/decoder_tests[1]_tests.cmake")
-else()
-  add_test(decoder_tests_NOT_BUILT decoder_tests_NOT_BUILT)
-endif()
