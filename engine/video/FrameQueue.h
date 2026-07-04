@@ -64,6 +64,12 @@ public:
         while (!queue_.empty()) queue_.pop();
     }
 
+    double front_pts() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (queue_.empty()) return -1.0;
+        return queue_.front().pts;
+    }
+
     void set_max_size(size_t max) {
         std::lock_guard<std::mutex> lock(mutex_);
         max_size_ = max;

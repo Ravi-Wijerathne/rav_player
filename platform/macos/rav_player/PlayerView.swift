@@ -23,7 +23,7 @@ struct PlayerView: View {
     private var videoArea: some View {
         if viewModel.hasVideo {
             MetalVideoView()
-                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .aspectRatio(viewModel.videoAspectRatio, contentMode: .fit)
         } else if viewModel.hasAudio {
             audioPlaceholder
         } else {

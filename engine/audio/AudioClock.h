@@ -39,12 +39,16 @@ public:
 
     void set_pts(double pts) {
         pts_ = pts;
+        bytes_consumed_ = 0;
         clock_.reset();
         clock_.start();
         running_ = true;
     }
 
     double pts() const {
+        if (bytes_per_second_ > 0.0 && bytes_consumed_.load() > 0) {
+            return pts_ + static_cast<double>(bytes_consumed_.load()) / bytes_per_second_;
+        }
         return pts_ + clock_.elapsed();
     }
 

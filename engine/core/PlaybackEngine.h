@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -112,6 +113,7 @@ public:
     }
 
     void play() {
+        std::lock_guard<std::mutex> lock(control_mutex_);
         if (state_.load() != PlayerState::Stopped &&
             state_.load() != PlayerState::Paused) {
             return;
@@ -124,19 +126,24 @@ public:
 
         flush_buffers();
         audio_clock_.reset();
+        audio_clock_.start();
         video_clock_.reset();
+        audio_started_ = false;
 
-        if (audio_output_) {
+        if (audio_output_ && audio_stream_ >= 0) {
             AudioOutputSpec spec;
-            if (audio_stream_ >= 0) {
-                spec.sample_rate = audio_decoder_.sample_rate();
-                spec.format = audio_decoder_.sample_format();
-                auto* stream = reader_.context()->streams[audio_stream_];
-                auto* par = stream->codecpar;
-                spec.channels = par->ch_layout.nb_channels;
-                spec.channel_layout = par->ch_layout.u.mask;
-            }
+            spec.sample_rate = audio_decoder_.sample_rate();
+            spec.format = audio_decoder_.sample_format();
+            auto* stream = reader_.context()->streams[audio_stream_];
+            auto* par = stream->codecpar;
+            spec.channels = par->ch_layout.nb_channels;
+            spec.channel_layout = par->ch_layout.u.mask;
             audio_output_->init(spec);
+
+            int bytes_per_sample = av_get_bytes_per_sample(audio_decoder_.sample_format());
+            if (bytes_per_sample <= 0) bytes_per_sample = 4;
+            audio_clock_.set_bytes_per_second(
+                spec.sample_rate * spec.channels * bytes_per_sample);
         }
 
         set_state(PlayerState::Playing);
@@ -146,15 +153,19 @@ public:
     }
 
     void pause() {
-        auto expected = PlayerState::Playing;
-        if (!state_.compare_exchange_strong(expected, PlayerState::Paused))
-            return;
-        audio_clock_.pause();
-        if (audio_output_) audio_output_->pause();
+        {
+            std::lock_guard<std::mutex> lock(control_mutex_);
+            auto expected = PlayerState::Playing;
+            if (!state_.compare_exchange_strong(expected, PlayerState::Paused))
+                return;
+            audio_clock_.pause();
+            if (audio_output_) audio_output_->pause();
+        }
         event_bus_.publish(PlaybackPausedEvent{});
     }
 
     void seek(double seconds) {
+        std::lock_guard<std::mutex> lock(control_mutex_);
         if (state_.load() != PlayerState::Playing &&
             state_.load() != PlayerState::Paused) {
             return;
@@ -164,18 +175,26 @@ public:
     }
 
     void stop() {
-        running_ = false;
+        {
+            std::lock_guard<std::mutex> lock(control_mutex_);
+            running_ = false;
+            if (audio_output_) {
+                audio_output_->stop();
+            }
+        }
         if (playback_thread_.joinable()) {
             playback_thread_.join();
         }
-        if (audio_output_) {
-            audio_output_->stop();
-            audio_output_->shutdown();
+        {
+            std::lock_guard<std::mutex> lock(control_mutex_);
+            if (audio_output_) {
+                audio_output_->shutdown();
+            }
+            flush_buffers();
+            audio_clock_.reset();
+            video_clock_.reset();
+            set_state(PlayerState::Stopped);
         }
-        flush_buffers();
-        audio_clock_.reset();
-        video_clock_.reset();
-        set_state(PlayerState::Stopped);
         event_bus_.publish(PlaybackEndedEvent{});
     }
 
@@ -219,7 +238,8 @@ public:
         }
 
         while (total_frames < frames_requested) {
-            AudioFrame aframe = audio_queue_.pop();
+            AudioFrame aframe;
+            if (!audio_queue_.try_pop(aframe, 100)) break;
             if (!aframe.frame) break;
 
             int frames = aframe.nb_samples;
@@ -250,6 +270,19 @@ public:
 
     bool has_video() const { return video_stream_ >= 0; }
     bool has_audio() const { return audio_stream_ >= 0; }
+    int video_queue_size() const { return video_queue_.size(); }
+    int audio_queue_size() const { return audio_queue_.size(); }
+
+    bool sync_pop_video_frame(VideoFrame& out) {
+        if (!has_video()) return false;
+        double current = current_time();
+        double front_pts = video_queue_.front_pts();
+        if (front_pts < 0) return false;
+        if (front_pts <= current + 0.001) {
+            return video_queue_.try_pop(out, 0);
+        }
+        return false;
+    }
 
     VideoFrame pop_video_frame() {
         return video_queue_.pop();
@@ -258,6 +291,9 @@ public:
     bool try_pop_video_frame(VideoFrame& out, int timeout_ms = 0) {
         return video_queue_.try_pop(out, timeout_ms);
     }
+
+    int video_width() const { return video_width_; }
+    int video_height() const { return video_height_; }
 
 private:
     void set_state(PlayerState new_state) {
@@ -320,9 +356,9 @@ private:
                 continue;
             }
 
-            if (audio_stream_ >= 0 && audio_output_ && audio_output_->is_initialized()) {
-                if (!audio_output_->is_playing()) {
-                    audio_output_->play();
+            if (audio_stream_ >= 0 && audio_output_ && audio_output_->is_initialized() && !audio_started_) {
+                if (audio_output_->play()) {
+                    audio_started_ = true;
                 }
             }
 
@@ -352,6 +388,10 @@ private:
                         vf.pix_fmt = video_decoder_.pixel_format();
                         vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
                         vf.duration = 1.0 / 30.0;
+                        if (video_width_ == 0) {
+                            video_width_ = vf.width;
+                            video_height_ = vf.height;
+                        }
                         video_queue_.push(std::move(vf));
                     }
                 }
@@ -385,14 +425,6 @@ private:
             if (now - last_stats > std::chrono::seconds(1)) {
                 last_stats = now;
             }
-
-            if (state_.load() == PlayerState::Playing && video_renderer_ && video_renderer_->is_ready()) {
-                VideoFrame vf;
-                if (video_queue_.try_pop(vf, 0)) {
-                    video_clock_.set_pts(vf.pts, 0);
-                    video_renderer_->present_frame(vf);
-                }
-            }
         }
 
         av_packet_free(&pkt);
@@ -417,13 +449,17 @@ private:
     int video_stream_{-1};
     int audio_stream_{-1};
 
+    int video_width_{0};
+    int video_height_{0};
     double duration_{0.0};
     std::atomic<PlayerState> state_{PlayerState::Idle};
     std::atomic<float> volume_{1.0f};
 
+    std::mutex control_mutex_;
     std::thread playback_thread_;
     std::atomic<bool> running_{false};
     std::atomic<bool> seek_requested_{false};
+    bool audio_started_{false};
     double seek_target_{0.0};
 };
 

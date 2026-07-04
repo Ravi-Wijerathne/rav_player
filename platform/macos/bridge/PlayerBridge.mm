@@ -86,6 +86,9 @@ using namespace rav;
 - (void)setVolume:(float)vol { _engine->set_volume(vol); }
 - (BOOL)hasVideo { return _engine->has_video() ? YES : NO; }
 - (BOOL)hasAudio { return _engine->has_audio() ? YES : NO; }
+- (int)videoQueueDepth { return _engine ? _engine->video_queue_size() : 0; }
+- (int)videoWidth { return _engine ? _engine->video_width() : 0; }
+- (int)videoHeight { return _engine ? _engine->video_height() : 0; }
 
 - (void)setupMetalLayer:(void*)metalLayer width:(int)width height:(int)height {
     if (!_renderer) return;
@@ -94,12 +97,17 @@ using namespace rav;
     _renderer->init();
 }
 
+- (void)resizeMetal:(int)width height:(int)height {
+    if (!_renderer) return;
+    _renderer->resize(width, height);
+}
+
 - (void)renderFrame {
     if (!_engine || !_renderer || !_renderer->is_ready()) return;
     if (_engine->state() != PlayerState::Playing) return;
 
     VideoFrame vf;
-    if (_engine->try_pop_video_frame(vf, 0)) {
+    if (_engine->sync_pop_video_frame(vf)) {
         _renderer->present_frame(vf);
     }
 }

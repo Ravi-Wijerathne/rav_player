@@ -18,7 +18,7 @@ bool MacOSAudioOutput::init(const AudioOutputSpec& spec) {
     asbd_.mReserved = 0;
 
     OSStatus status = AudioQueueNewOutput(&asbd_, audio_queue_callback,
-                                           this, CFRunLoopGetCurrent(),
+                                           this, NULL,
                                            kCFRunLoopCommonModes, 0, &queue_);
     if (status != noErr || !queue_) return false;
 
@@ -98,7 +98,7 @@ bool MacOSAudioOutput::stop() {
 void MacOSAudioOutput::audio_queue_callback(void* user_data, AudioQueueRef queue,
                                              AudioQueueBufferRef buffer) {
     auto* self = static_cast<MacOSAudioOutput*>(user_data);
-    if (!self || !self->playing_) return;
+    if (!self) return;
 
     if (self->fill_cb_) {
         int frames = self->fill_cb_(static_cast<uint8_t*>(buffer->mAudioData),

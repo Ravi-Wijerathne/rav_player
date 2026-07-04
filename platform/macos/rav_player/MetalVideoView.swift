@@ -7,7 +7,6 @@ struct MetalVideoView: NSViewRepresentable {
     func makeNSView(context: Context) -> MetalVideoNSView {
         let view = MetalVideoNSView()
         view.viewModel = viewModel
-        viewModel.setupMetalLayer(view.metalLayer, width: Int(view.frame.width), height: Int(view.frame.height))
         return view
     }
 
@@ -19,6 +18,7 @@ struct MetalVideoView: NSViewRepresentable {
 class MetalVideoNSView: NSView {
     let metalLayer = CAMetalLayer()
     weak var viewModel: PlayerViewModel?
+    private var setupDone = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -36,14 +36,39 @@ class MetalVideoNSView: NSView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        metalLayer.needsDisplayOnBoundsChange = true
         layer = metalLayer
     }
 
-    override func viewDidEndLiveResize() {
-        super.viewDidEndLiveResize()
-        viewModel?.setupMetalLayer(metalLayer,
-                                    width: Int(metalLayer.bounds.width * metalLayer.contentsScale),
-                                    height: Int(metalLayer.bounds.height * metalLayer.contentsScale))
+    private func ensureMetalSetup() {
+        let w = Int(metalLayer.bounds.width * metalLayer.contentsScale)
+        let h = Int(metalLayer.bounds.height * metalLayer.contentsScale)
+        guard w > 0 && h > 0 else { return }
+
+        if !setupDone {
+            setupDone = true
+            viewModel?.setupMetalLayer(metalLayer, width: w, height: h)
+        } else {
+            viewModel?.resizeMetal(width: Int32(w), height: Int32(h))
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil {
+            ensureMetalSetup()
+        }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if newSize.width > 0 && newSize.height > 0 {
+            if setupDone {
+                let w = Int(metalLayer.bounds.width * metalLayer.contentsScale)
+                let h = Int(metalLayer.bounds.height * metalLayer.contentsScale)
+                viewModel?.resizeMetal(width: Int32(w), height: Int32(h))
+            } else if window != nil {
+                ensureMetalSetup()
+            }
+        }
     }
 }
