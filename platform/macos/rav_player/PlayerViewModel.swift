@@ -10,6 +10,12 @@ class PlayerViewModel: ObservableObject {
     @Published var hasAudio: Bool = false
     @Published var currentURL: String = ""
     @Published var isPlayable: Bool = false
+    @Published var videoWidth: Int = 0
+    @Published var videoHeight: Int = 0
+    var videoAspectRatio: CGFloat {
+        guard videoWidth > 0 && videoHeight > 0 else { return 16.0 / 9.0 }
+        return CGFloat(videoWidth) / CGFloat(videoHeight)
+    }
 
     private let bridge = PlayerBridge()
     private var displayLink: CVDisplayLink?
@@ -50,6 +56,8 @@ class PlayerViewModel: ObservableObject {
 
     func loadMedia(url: URL) {
         currentURL = url.absoluteString
+        videoWidth = 0
+        videoHeight = 0
 
         if bridge.open(url.absoluteString) {
             isPlayable = true
@@ -107,6 +115,10 @@ class PlayerViewModel: ObservableObject {
         startDisplayLink()
     }
 
+    func resizeMetal(width: Int32, height: Int32) {
+        bridge.resizeMetal(width, height: height)
+    }
+
     func renderFrame() {
         bridge.renderFrame()
     }
@@ -138,6 +150,12 @@ class PlayerViewModel: ObservableObject {
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.currentTime = self.bridge.currentTime
+                let w = Int(self.bridge.videoWidth)
+                let h = Int(self.bridge.videoHeight)
+                if w > 0 && h > 0 && (w != self.videoWidth || h != self.videoHeight) {
+                    self.videoWidth = w
+                    self.videoHeight = h
+                }
                 self.updateState()
             }
         }

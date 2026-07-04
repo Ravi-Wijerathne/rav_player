@@ -29,8 +29,12 @@ typedef NS_ENUM(NSInteger, PlayerBridgeState) {
 
 @property (readonly) BOOL hasVideo;
 @property (readonly) BOOL hasAudio;
+@property (readonly) int videoQueueDepth;
+@property (readonly) int videoWidth;
+@property (readonly) int videoHeight;
 
 - (void)setupMetalLayer:(void*)metalLayer width:(int)width height:(int)height;
+- (void)resizeMetal:(int)width height:(int)height;
 - (void)renderFrame;
 
 @end

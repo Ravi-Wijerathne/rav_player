@@ -16,7 +16,10 @@ public:
     id<MTLLibrary> library = nil;
     id<MTLRenderPipelineState> pipelineState = nil;
     id<MTLRenderPipelineState> yuvPipelineState = nil;
-    id<MTLBuffer> vertexBuffer = nil;
+    id<MTLBuffer> vertexBuffer0 = nil;
+    id<MTLBuffer> vertexBuffer90 = nil;
+    id<MTLBuffer> vertexBuffer180 = nil;
+    id<MTLBuffer> vertexBuffer270 = nil;
     CAMetalLayer* metalLayer = nil;
     dispatch_semaphore_t inflightSemaphore = nil;
 
@@ -26,10 +29,16 @@ public:
 
     bool setupMetal() {
         device = MTLCreateSystemDefaultDevice();
-        if (!device) return false;
+        if (!device) {
+            NSLog(@"MetalRenderer: MTLCreateSystemDefaultDevice failed");
+            return false;
+        }
 
         commandQueue = [device newCommandQueue];
-        if (!commandQueue) return false;
+        if (!commandQueue) {
+            NSLog(@"MetalRenderer: newCommandQueue failed");
+            return false;
+        }
 
         inflightSemaphore = dispatch_semaphore_create(3);
 
@@ -37,31 +46,45 @@ public:
 
         // Try loading precompiled metallib from app bundle
         NSURL* libURL = [[NSBundle mainBundle] URLForResource:@"shaders"
-                                                withExtension:@"metallib"];
+                                                 withExtension:@"metallib"];
         if (libURL) {
             library = [device newLibraryWithURL:libURL error:&error];
+            if (!library) {
+                NSLog(@"MetalRenderer: failed to load metallib from %@: %@",
+                      libURL, error.localizedDescription);
+            }
+        } else {
+            NSLog(@"MetalRenderer: shaders.metallib not found in bundle");
         }
 
         // Fall back to default library (embedded in binary)
         if (!library) {
             library = [device newDefaultLibrary];
+            if (!library) {
+                NSLog(@"MetalRenderer: newDefaultLibrary also failed");
+            }
         }
 
         if (!library) return false;
 
-        setupPipeline();
+        if (!setupPipeline()) return false;
         setupVertices();
 
         ready = true;
         return true;
     }
 
-    void setupPipeline() {
+    bool setupPipeline() {
         auto* vertexFn = [library newFunctionWithName:@"vertexShader"];
         auto* fragmentFn = [library newFunctionWithName:@"fragmentShader"];
         auto* yuvFragmentFn = [library newFunctionWithName:@"yuvFragmentShader"];
 
-        if (vertexFn && fragmentFn) {
+        if (!vertexFn) {
+            NSLog(@"MetalRenderer: vertexShader function not found in library");
+            return false;
+        }
+
+        if (fragmentFn) {
             MTLRenderPipelineDescriptor* desc = [MTLRenderPipelineDescriptor new];
             desc.label = @"RGBA Pipeline";
             desc.vertexFunction = vertexFn;
@@ -70,9 +93,14 @@ public:
 
             NSError* error = nil;
             pipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+            if (!pipelineState) {
+                NSLog(@"MetalRenderer: RGBA pipeline error: %@", error.localizedDescription);
+            }
+        } else {
+            NSLog(@"MetalRenderer: fragmentShader function not found");
         }
 
-        if (vertexFn && yuvFragmentFn) {
+        if (yuvFragmentFn) {
             MTLRenderPipelineDescriptor* desc = [MTLRenderPipelineDescriptor new];
             desc.label = @"YUV Pipeline";
             desc.vertexFunction = vertexFn;
@@ -81,23 +109,75 @@ public:
 
             NSError* error = nil;
             yuvPipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+            if (!yuvPipelineState) {
+                NSLog(@"MetalRenderer: YUV pipeline error: %@", error.localizedDescription);
+            }
         }
+
+        return pipelineState != nil;
     }
 
     void setupVertices() {
-        static const Vertex quad[] = {
+        static const Vertex quad0[] = {
             { .position = { -1.0,  -1.0 }, .texcoord = { 0.0, 1.0 } },
             { .position = {  1.0,  -1.0 }, .texcoord = { 1.0, 1.0 } },
             { .position = { -1.0,   1.0 }, .texcoord = { 0.0, 0.0 } },
             { .position = {  1.0,   1.0 }, .texcoord = { 1.0, 0.0 } },
         };
-        vertexBuffer = [device newBufferWithBytes:quad
-                                          length:sizeof(quad)
-                                         options:MTLResourceStorageModeShared];
+        vertexBuffer0 = [device newBufferWithBytes:quad0
+                                           length:sizeof(quad0)
+                                          options:MTLResourceStorageModeShared];
+
+        static const Vertex quad90[] = {
+            { .position = { -1.0,  -1.0 }, .texcoord = { 1.0, 1.0 } },
+            { .position = {  1.0,  -1.0 }, .texcoord = { 1.0, 0.0 } },
+            { .position = { -1.0,   1.0 }, .texcoord = { 0.0, 1.0 } },
+            { .position = {  1.0,   1.0 }, .texcoord = { 0.0, 0.0 } },
+        };
+        vertexBuffer90 = [device newBufferWithBytes:quad90
+                                            length:sizeof(quad90)
+                                           options:MTLResourceStorageModeShared];
+
+        static const Vertex quad180[] = {
+            { .position = { -1.0,  -1.0 }, .texcoord = { 1.0, 0.0 } },
+            { .position = {  1.0,  -1.0 }, .texcoord = { 0.0, 0.0 } },
+            { .position = { -1.0,   1.0 }, .texcoord = { 1.0, 1.0 } },
+            { .position = {  1.0,   1.0 }, .texcoord = { 0.0, 1.0 } },
+        };
+        vertexBuffer180 = [device newBufferWithBytes:quad180
+                                             length:sizeof(quad180)
+                                            options:MTLResourceStorageModeShared];
+
+        static const Vertex quad270[] = {
+            { .position = { -1.0,  -1.0 }, .texcoord = { 0.0, 0.0 } },
+            { .position = {  1.0,  -1.0 }, .texcoord = { 0.0, 1.0 } },
+            { .position = { -1.0,   1.0 }, .texcoord = { 1.0, 0.0 } },
+            { .position = {  1.0,   1.0 }, .texcoord = { 1.0, 1.0 } },
+        };
+        vertexBuffer270 = [device newBufferWithBytes:quad270
+                                             length:sizeof(quad270)
+                                            options:MTLResourceStorageModeShared];
     }
 
-    void render(id<MTLTexture> texture, bool isYUV) {
-        if (!ready || !metalLayer || !texture) return;
+    void render(id<MTLTexture> texture, bool isYUV, int rotation) {
+        if (!ready) {
+            static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but not ready");
+            return;
+        }
+        if (!metalLayer) {
+            static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but metalLayer is nil");
+            return;
+        }
+        if (!texture) {
+            static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but texture is nil");
+            return;
+        }
+
+        id<MTLRenderPipelineState> ps = isYUV ? yuvPipelineState : pipelineState;
+        if (!ps) {
+            static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but pipelineState is nil");
+            return;
+        }
 
         dispatch_semaphore_wait(inflightSemaphore, DISPATCH_TIME_FOREVER);
 
@@ -115,6 +195,7 @@ public:
 
             id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
             if (!drawable) {
+                static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: nextDrawable returned nil");
                 [cmdBuffer commit];
                 return;
             }
@@ -137,9 +218,12 @@ public:
                 0.0, 0.0, (double)width, (double)height, 0.0, 1.0
             }];
 
-            auto* ps = isYUV ? yuvPipelineState : pipelineState;
             [encoder setRenderPipelineState:ps];
-            [encoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+            id<MTLBuffer> vBuf = vertexBuffer0;
+            if (rotation == 90) vBuf = vertexBuffer90;
+            else if (rotation == 180) vBuf = vertexBuffer180;
+            else if (rotation == 270) vBuf = vertexBuffer270;
+            [encoder setVertexBuffer:vBuf offset:0 atIndex:0];
 
             Uniforms uniforms;
             [encoder setFragmentBytes:&uniforms length:sizeof(uniforms)
@@ -174,7 +258,14 @@ void MetalRenderer::shutdown() {
 }
 
 bool MetalRenderer::present_frame(const VideoFrame& frame) {
-    if (!impl_->ready || !frame.frame) return false;
+    if (!impl_->ready) {
+        static int once = 0; if (++once == 1) NSLog(@"MetalRenderer::present_frame: not ready");
+        return false;
+    }
+    if (!frame.frame) {
+        static int once = 0; if (++once == 1) NSLog(@"MetalRenderer::present_frame: null frame");
+        return false;
+    }
 
     int w = frame.width;
     int h = frame.height;
@@ -213,7 +304,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                  withBytes:frame_converter_.data()
                bytesPerRow:frame_converter_.linesize()];
 
-    impl_->render(texture, false);
+    impl_->render(texture, false, frame.rotation);
     return true;
 }
 
