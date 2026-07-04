@@ -1,0 +1,68 @@
+{
+  "tests": 10,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "VideoDecoderTest",
+      "tests": 5,
+      "testsuite": [
+        {
+          "name": "CreateAndDestroy",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/VideoDecoderTest.cpp",
+          "line": 6
+        },
+        {
+          "name": "OpenWithNullCodecpar",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/VideoDecoderTest.cpp",
+          "line": 11
+        },
+        {
+          "name": "OpenWithNonexistentCodec",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/VideoDecoderTest.cpp",
+          "line": 16
+        },
+        {
+          "name": "GetDimensionsWhenClosed",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/VideoDecoderTest.cpp",
+          "line": 23
+        },
+        {
+          "name": "PixelFormatWhenClosed",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/VideoDecoderTest.cpp",
+          "line": 29
+        }
+      ]
+    },
+    {
+      "name": "AudioDecoderTest",
+      "tests": 5,
+      "testsuite": [
+        {
+          "name": "CreateAndDestroy",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/AudioDecoderTest.cpp",
+          "line": 6
+        },
+        {
+          "name": "OpenWithNullCodecpar",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/AudioDecoderTest.cpp",
+          "line": 11
+        },
+        {
+          "name": "SampleRateWhenClosed",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/AudioDecoderTest.cpp",
+          "line": 16
+        },
+        {
+          "name": "SampleFormatWhenClosed",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/AudioDecoderTest.cpp",
+          "line": 21
+        },
+        {
+          "name": "CloseWhenNotOpen",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/decoder\/AudioDecoderTest.cpp",
+          "line": 26
+        }
+      ]
+    }
+  ]
+}

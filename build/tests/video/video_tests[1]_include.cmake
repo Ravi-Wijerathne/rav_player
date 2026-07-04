@@ -1,0 +1,5 @@
+if(EXISTS "/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/video/video_tests[1]_tests.cmake")
+  include("/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/video/video_tests[1]_tests.cmake")
+else()
+  add_test(video_tests_NOT_BUILT video_tests_NOT_BUILT)
+endif()

@@ -1,0 +1,5 @@
+if(EXISTS "/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/subtitles/subtitle_tests[1]_tests.cmake")
+  include("/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/subtitles/subtitle_tests[1]_tests.cmake")
+else()
+  add_test(subtitle_tests_NOT_BUILT subtitle_tests_NOT_BUILT)
+endif()

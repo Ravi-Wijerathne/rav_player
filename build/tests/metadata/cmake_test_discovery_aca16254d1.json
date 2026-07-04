@@ -1,0 +1,88 @@
+{
+  "tests": 14,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "MetadataExtractorTest",
+      "tests": 5,
+      "testsuite": [
+        {
+          "name": "NonExistentFile",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/MetadataExtractorTest.cpp",
+          "line": 6
+        },
+        {
+          "name": "MediaInfoDefaults",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/MetadataExtractorTest.cpp",
+          "line": 13
+        },
+        {
+          "name": "MediaStreamInfoDefaults",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/MetadataExtractorTest.cpp",
+          "line": 24
+        },
+        {
+          "name": "HasEmbeddedMetadata",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/MetadataExtractorTest.cpp",
+          "line": 34
+        },
+        {
+          "name": "ExtractNonExistentURI",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/MetadataExtractorTest.cpp",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "name": "ArtworkExtractorTest",
+      "tests": 9,
+      "testsuite": [
+        {
+          "name": "NoArtworkForNonexistentFile",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 6
+        },
+        {
+          "name": "ExtractFromNonexistentFile",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 11
+        },
+        {
+          "name": "DetectJPEG",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 17
+        },
+        {
+          "name": "DetectPNG",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 23
+        },
+        {
+          "name": "DetectBMP",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 29
+        },
+        {
+          "name": "DetectGIF",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 35
+        },
+        {
+          "name": "DetectUnknown",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 41
+        },
+        {
+          "name": "DetectEmptyData",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 47
+        },
+        {
+          "name": "IsValidImage",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/metadata\/ArtworkExtractorTest.cpp",
+          "line": 52
+        }
+      ]
+    }
+  ]
+}

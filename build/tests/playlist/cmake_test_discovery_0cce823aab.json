@@ -1,0 +1,204 @@
+{
+  "tests": 36,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "PlaylistTest",
+      "tests": 9,
+      "testsuite": [
+        {
+          "name": "InitiallyEmpty",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 7
+        },
+        {
+          "name": "NamedPlaylist",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 13
+        },
+        {
+          "name": "AddItems",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 18
+        },
+        {
+          "name": "AccessItems",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 33
+        },
+        {
+          "name": "RemoveItem",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 45
+        },
+        {
+          "name": "Clear",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 56
+        },
+        {
+          "name": "SetName",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 64
+        },
+        {
+          "name": "ItemsAccessor",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 70
+        },
+        {
+          "name": "ModifiableItem",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistTest.cpp",
+          "line": 78
+        }
+      ]
+    },
+    {
+      "name": "PlaybackQueueTest",
+      "tests": 16,
+      "testsuite": [
+        {
+          "name": "InitiallyEmpty",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 15
+        },
+        {
+          "name": "AddItems",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 21
+        },
+        {
+          "name": "SetItems",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 29
+        },
+        {
+          "name": "CurrentItem",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 35
+        },
+        {
+          "name": "NextItem",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 41
+        },
+        {
+          "name": "PreviousItem",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 49
+        },
+        {
+          "name": "HasNext",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 58
+        },
+        {
+          "name": "HasPrevious",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 67
+        },
+        {
+          "name": "Shuffle",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 76
+        },
+        {
+          "name": "RepeatNone",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 85
+        },
+        {
+          "name": "RepeatAll",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 96
+        },
+        {
+          "name": "RepeatOne",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 105
+        },
+        {
+          "name": "GoTo",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 113
+        },
+        {
+          "name": "Clear",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 122
+        },
+        {
+          "name": "RemoveItem",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 130
+        },
+        {
+          "name": "EmptyQueueThrows",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaybackQueueTest.cpp",
+          "line": 139
+        }
+      ]
+    },
+    {
+      "name": "PlaylistParserTest",
+      "tests": 11,
+      "testsuite": [
+        {
+          "name": "DetectM3U",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 6
+        },
+        {
+          "name": "DetectPLS",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 11
+        },
+        {
+          "name": "DetectUnknown",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 15
+        },
+        {
+          "name": "ParseM3USimple",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 20
+        },
+        {
+          "name": "ParseM3UNoExtinf",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 38
+        },
+        {
+          "name": "ParsePLS",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 51
+        },
+        {
+          "name": "ParsePLSNoTitle",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 71
+        },
+        {
+          "name": "SerializeM3U",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 85
+        },
+        {
+          "name": "SerializePLS",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 105
+        },
+        {
+          "name": "IsPlaylistExtension",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 120
+        },
+        {
+          "name": "ParseByDetectM3U",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/playlist\/PlaylistParserTest.cpp",
+          "line": 128
+        }
+      ]
+    }
+  ]
+}

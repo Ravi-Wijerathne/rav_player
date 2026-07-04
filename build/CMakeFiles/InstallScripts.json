@@ -1,0 +1,25 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/third_party/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/_deps/googletest-build/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/_deps/googletest-build/googlemock/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/_deps/googletest-build/googletest/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/engine/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/core/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/utilities/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/ffmpeg/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/media/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/decoder/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/video/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/audio/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/subtitles/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/rendering/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/streaming/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/playlist/cmake_install.cmake",
+		"/Users/neo/Documents/SLIIT/Projects/rav_player/build/tests/metadata/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

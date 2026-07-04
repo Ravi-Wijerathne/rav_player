@@ -1,0 +1,114 @@
+{
+  "tests": 18,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "SRTParserTest",
+      "tests": 8,
+      "testsuite": [
+        {
+          "name": "Format",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 20
+        },
+        {
+          "name": "ParseValidSRT",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 25
+        },
+        {
+          "name": "FirstFrameTiming",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 32
+        },
+        {
+          "name": "FirstFrameText",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 41
+        },
+        {
+          "name": "MultilineText",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 48
+        },
+        {
+          "name": "LongSubtitleTiming",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 55
+        },
+        {
+          "name": "FramesAtTime",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 63
+        },
+        {
+          "name": "LoadNonexistentFile",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SRTParserTest.cpp",
+          "line": 76
+        }
+      ]
+    },
+    {
+      "name": "ASSParserTest",
+      "tests": 7,
+      "testsuite": [
+        {
+          "name": "Format",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/ASSParserTest.cpp",
+          "line": 16
+        },
+        {
+          "name": "ParseValidASS",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/ASSParserTest.cpp",
+          "line": 21
+        },
+        {
+          "name": "FirstFrameTiming",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/ASSParserTest.cpp",
+          "line": 28
+        },
+        {
+          "name": "FirstFrameText",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/ASSParserTest.cpp",
+          "line": 36
+        },
+        {
+          "name": "StripsOverrides",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/ASSParserTest.cpp",
+          "line": 43
+        },
+        {
+          "name": "HandlesNewlines",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/ASSParserTest.cpp",
+          "line": 50
+        },
+        {
+          "name": "LoadNonexistentFile",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/ASSParserTest.cpp",
+          "line": 57
+        }
+      ]
+    },
+    {
+      "name": "SubtitleFrameTest",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "DefaultFrame",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SubtitleFrameTest.cpp",
+          "line": 6
+        },
+        {
+          "name": "TextFrameIsValid",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SubtitleFrameTest.cpp",
+          "line": 15
+        },
+        {
+          "name": "BitmapFrameIsValid",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/subtitles\/SubtitleFrameTest.cpp",
+          "line": 21
+        }
+      ]
+    }
+  ]
+}

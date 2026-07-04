@@ -1,0 +1,3 @@
+123:HLSPlaylistParserTest.ParseSimplePlaylist
+127:HLSPlaylistParserTest.ParseWithoutEndlist
+174:PlaylistParserTest.DetectPLS

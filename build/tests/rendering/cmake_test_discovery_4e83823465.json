@@ -1,0 +1,47 @@
+{
+  "tests": 7,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "FrameConverterTest",
+      "tests": 7,
+      "testsuite": [
+        {
+          "name": "InitiallyNotOpen",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/rendering\/FrameConverterTest.cpp",
+          "line": 13
+        },
+        {
+          "name": "InitAndClose",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/rendering\/FrameConverterTest.cpp",
+          "line": 18
+        },
+        {
+          "name": "ConvertDummyFrame",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/rendering\/FrameConverterTest.cpp",
+          "line": 38
+        },
+        {
+          "name": "MoveConstructor",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/rendering\/FrameConverterTest.cpp",
+          "line": 68
+        },
+        {
+          "name": "InvalidInit",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/rendering\/FrameConverterTest.cpp",
+          "line": 86
+        },
+        {
+          "name": "ConvertWithNullInput",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/rendering\/FrameConverterTest.cpp",
+          "line": 97
+        },
+        {
+          "name": "ResizeConversion",
+          "file": "\/Users\/neo\/Documents\/SLIIT\/Projects\/rav_player\/tests\/rendering\/FrameConverterTest.cpp",
+          "line": 111
+        }
+      ]
+    }
+  ]
+}
