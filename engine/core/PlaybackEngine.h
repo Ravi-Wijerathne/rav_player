@@ -166,6 +166,9 @@ public:
 
         set_state(PlayerState::Playing);
         running_ = true;
+        if (playback_thread_.joinable()) {
+            playback_thread_.join();
+        }
         playback_thread_ = std::thread(&PlaybackEngine::playback_thread_fn, this);
         event_bus_.publish(PlaybackStartedEvent{});
     }

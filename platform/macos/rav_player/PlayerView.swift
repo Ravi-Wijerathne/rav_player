@@ -5,18 +5,40 @@ struct PlayerView: View {
     @EnvironmentObject var viewModel: PlayerViewModel
     @State private var isDragging = false
     @State private var dragTime: Double = 0
+    @State private var osdText: String?
+    @State private var osdTimer: Timer?
 
     var body: some View {
-        VStack(spacing: 0) {
-            videoArea
+        ZStack {
+            VStack(spacing: 0) {
+                videoArea
 
-            if viewModel.isPlayable {
-                controlsArea
-            } else {
-                dropArea
+                if viewModel.isPlayable {
+                    controlsArea
+                } else {
+                    dropArea
+                }
+            }
+            .background(Color.black)
+
+            if let osdText = osdText {
+                Text(osdText)
+                    .font(.system(size: 32, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(12)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
             }
         }
-        .background(Color.black)
+        .onAppear {
+            setupKeyboardShortcuts()
+        }
+        .onDisappear {
+            KeyboardShortcutManager.shared.stopMonitoring()
+        }
     }
 
     @ViewBuilder
@@ -177,6 +199,35 @@ struct PlayerView: View {
                 Task { @MainActor in
                     self.viewModel.loadMedia(url: url)
                 }
+            }
+        }
+    }
+
+    private func setupKeyboardShortcuts() {
+        KeyboardShortcutManager.shared.onPlayPause = {
+            viewModel.togglePlayPause()
+        }
+        KeyboardShortcutManager.shared.onSeekForward = {
+            let target = min(viewModel.currentTime + 10, viewModel.duration)
+            viewModel.seek(to: target)
+            showOSD(text: "Forward 10s")
+        }
+        KeyboardShortcutManager.shared.onSeekBackward = {
+            let target = max(viewModel.currentTime - 10, 0)
+            viewModel.seek(to: target)
+            showOSD(text: "Backward 10s")
+        }
+        KeyboardShortcutManager.shared.startMonitoring()
+    }
+
+    private func showOSD(text: String) {
+        osdTimer?.invalidate()
+        withAnimation(.easeIn(duration: 0.1)) {
+            osdText = text
+        }
+        osdTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
+            withAnimation(.easeOut(duration: 0.5)) {
+                osdText = nil
             }
         }
     }
