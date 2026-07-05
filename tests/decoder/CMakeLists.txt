@@ -1,6 +1,7 @@
 add_executable(decoder_tests
     VideoDecoderTest.cpp
     AudioDecoderTest.cpp
+    PacketQueueTest.cpp
 )
 
 target_link_libraries(decoder_tests

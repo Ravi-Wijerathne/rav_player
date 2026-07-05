@@ -2,6 +2,7 @@ add_executable(utilities_tests
     RingBufferTest.cpp
     ThreadPoolTest.cpp
     ClockTest.cpp
+    SyncControllerTest.cpp
 )
 
 target_link_libraries(utilities_tests

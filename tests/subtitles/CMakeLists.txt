@@ -2,6 +2,8 @@ add_executable(subtitle_tests
     SRTParserTest.cpp
     ASSParserTest.cpp
     SubtitleFrameTest.cpp
+    SubtitleQueueTest.cpp
+    VttParserTest.cpp
 )
 
 target_link_libraries(subtitle_tests
