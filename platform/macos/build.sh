@@ -1,6 +1,18 @@
 #!/bin/bash
 set -e
 
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+    HOMEBREW_PREFIX="/opt/homebrew"
+elif [ "$ARCH" = "x86_64" ]; then
+    HOMEBREW_PREFIX="/usr/local"
+else
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+fi
+
+FFMPEG_DIR="$HOMEBREW_PREFIX"
+
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="$ROOT_DIR/build"
 APP_DIR="$ROOT_DIR/platform/macos/rav_player.app"
@@ -31,7 +43,7 @@ xcrun -sdk macosx metal -c "$ROOT_DIR/engine/rendering/shaders.metal" \
 xcrun -sdk macosx metallib "$BUILD_DIR/shaders.air" \
     -o "$APP_DIR/Contents/Resources/shaders.metallib" 2>&1
 
-FFMPEG_PREFIX="/opt/homebrew"
+FFMPEG_PREFIX="$HOMEBREW_PREFIX"
 
 # Compile Obj-C++ bridge separately with clang++
 BRIDGE_OBJ="$BUILD_DIR/PlayerBridge.o"
@@ -82,3 +94,11 @@ echo "=== Build Complete ==="
 echo "App bundle: $APP_DIR"
 echo ""
 echo "Run with: open '$APP_DIR'"
+
+if [ -n "${CODESIGN_IDENTITY}" ]; then
+    echo "Signing with identity: $CODESIGN_IDENTITY"
+    codesign --deep --force --verify --timestamp \
+        --options=runtime \
+        --sign "$CODESIGN_IDENTITY" \
+        "$APP_DIR/RavPlayer.app"
+fi
