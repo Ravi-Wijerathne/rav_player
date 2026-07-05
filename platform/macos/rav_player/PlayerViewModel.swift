@@ -58,13 +58,16 @@ class PlayerViewModel: ObservableObject {
     @Published var showPlaylist: Bool = false
     @Published var hasNextTrack: Bool = false
     @Published var hasPreviousTrack: Bool = false
+    @Published var errorMessage: String?
+    @Published var isSeeking: Bool = false
+    @Published var isBuffering: Bool = false
     var videoAspectRatio: CGFloat {
         guard videoWidth > 0 && videoHeight > 0 else { return 16.0 / 9.0 }
         return CGFloat(videoWidth) / CGFloat(videoHeight)
     }
 
     private let bridge = PlayerBridge()
-    private var timeObserver: Timer?
+    private var eventTimer: Timer?
     var isPlaying: Bool { state == .playing }
     var isPaused: Bool { state == .paused }
 
@@ -134,13 +137,13 @@ class PlayerViewModel: ObservableObject {
 
     func play() {
         bridge.play()
-        startTimeUpdates()
+        startEventPolling()
         updateState()
     }
 
     func pause() {
         bridge.pause()
-        stopTimeUpdates()
+        stopEventPolling()
         updateState()
     }
 
@@ -154,7 +157,7 @@ class PlayerViewModel: ObservableObject {
 
     func stop() {
         bridge.stop()
-        stopTimeUpdates()
+        stopEventPolling()
         currentTime = 0
         subtitleTexts = []
         updateState()
@@ -271,11 +274,14 @@ class PlayerViewModel: ObservableObject {
         bridge.renderFrame()
     }
 
-    private func startTimeUpdates() {
-        stopTimeUpdates()
-        timeObserver = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+    private func startEventPolling() {
+        stopEventPolling()
+        eventTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                while let event = self.bridge.pollEvent() {
+                    self.handleEvent(event)
+                }
                 self.currentTime = self.bridge.currentTime
                 let w = Int(self.bridge.videoWidth)
                 let h = Int(self.bridge.videoHeight)
@@ -285,17 +291,37 @@ class PlayerViewModel: ObservableObject {
                 }
                 self.subtitleTexts = self.bridge.currentSubtitleTexts()
                 self.updateState()
-                // Periodically sync playlist state (current index, next/prev availability)
                 self.currentPlaylistIndex = self.bridge.currentPlaylistIndex
                 self.hasNextTrack = self.bridge.hasNextTrack
                 self.hasPreviousTrack = self.bridge.hasPreviousTrack
+                self.isSeeking = self.bridge.state == .seeking
+                if self.bridge.state == .error {
+                    self.errorMessage = self.bridge.lastErrorMessage() ?? "Unknown error"
+                } else if self.errorMessage != nil {
+                    self.errorMessage = nil
+                }
             }
         }
     }
 
-    private func stopTimeUpdates() {
-        timeObserver?.invalidate()
-        timeObserver = nil
+    private func stopEventPolling() {
+        eventTimer?.invalidate()
+        eventTimer = nil
+    }
+
+    private func handleEvent(_ eventName: String) {
+        switch eventName {
+        case "PlaybackEndedEvent":
+            nextTrack()
+        case "ErrorOccurredEvent":
+            errorMessage = bridge.lastErrorMessage() ?? "Playback error"
+        case "BufferingStartedEvent":
+            isBuffering = true
+        case "BufferingEndedEvent":
+            isBuffering = false
+        default:
+            break
+        }
     }
 
     private func updateState() {
@@ -303,7 +329,7 @@ class PlayerViewModel: ObservableObject {
     }
 
     deinit {
-        timeObserver?.invalidate()
+        eventTimer?.invalidate()
         bridge.close()
     }
 }
