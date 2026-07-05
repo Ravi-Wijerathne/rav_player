@@ -6,7 +6,6 @@
 
 #include "../video/VideoFrame.h"
 #include "../video/VideoRenderer.h"
-#include "FrameConverter.h"
 
 namespace rav {
 
@@ -37,9 +36,6 @@ public:
 private:
     class Impl;
     std::unique_ptr<Impl> impl_;
-    FrameConverter frame_converter_;
-    int view_width_{0};
-    int view_height_{0};
 };
 
 } // namespace rav
