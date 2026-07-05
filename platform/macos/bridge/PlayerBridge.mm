@@ -1,6 +1,8 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 #include "PlayerBridge.h"
@@ -34,6 +36,7 @@ using namespace rav;
     dispatch_queue_t _renderQueue;
     NSMutableArray<PlayerBridgePlaylistItem*>* _playlistItems;
     NSString* _currentURL;
+    std::string _lastError;
 }
 
 - (void)syncPlaylistItems;
@@ -72,6 +75,9 @@ using namespace rav;
     BOOL result = _engine->open(path) ? YES : NO;
     if (result) {
         _currentURL = url;
+        _lastError.clear();
+    } else {
+        _lastError = "Failed to open file or stream";
     }
     return result;
 }
@@ -99,14 +105,44 @@ using namespace rav;
     _renderer->shutdown();
 }
 
+- (nullable NSString*)pollEvent {
+    PlayerEvent event;
+    if (!_engine->event_bus().poll(event)) return nil;
+
+    std::string eventName;
+    std::visit([&eventName, self](const auto& e) {
+        using T = std::decay_t<decltype(e)>;
+        if constexpr (std::is_same_v<T, PlaybackStartedEvent>) eventName = "PlaybackStartedEvent";
+        else if constexpr (std::is_same_v<T, PlaybackPausedEvent>) eventName = "PlaybackPausedEvent";
+        else if constexpr (std::is_same_v<T, PlaybackEndedEvent>) eventName = "PlaybackEndedEvent";
+        else if constexpr (std::is_same_v<T, MediaLoadedEvent>) eventName = "MediaLoadedEvent";
+        else if constexpr (std::is_same_v<T, BufferingStartedEvent>) eventName = "BufferingStartedEvent";
+        else if constexpr (std::is_same_v<T, BufferingEndedEvent>) eventName = "BufferingEndedEvent";
+        else if constexpr (std::is_same_v<T, StateChangedEvent>) eventName = "StateChangedEvent";
+        else if constexpr (std::is_same_v<T, ErrorOccurredEvent>) {
+            self->_lastError = e.message;
+            eventName = "ErrorOccurredEvent";
+        }
+        else eventName = "Unknown";
+    }, event);
+    return [NSString stringWithUTF8String:eventName.c_str()];
+}
+
+- (nullable NSString*)lastErrorMessage {
+    if (_lastError.empty()) return nil;
+    return [NSString stringWithUTF8String:_lastError.c_str()];
+}
+
 - (PlayerBridgeState)state {
     switch (_engine->state()) {
-        case PlayerState::Idle:    return PlayerBridgeStateIdle;
-        case PlayerState::Loading: return PlayerBridgeStateLoading;
-        case PlayerState::Playing: return PlayerBridgeStatePlaying;
-        case PlayerState::Paused:  return PlayerBridgeStatePaused;
-        case PlayerState::Stopped: return PlayerBridgeStateStopped;
-        default:                   return PlayerBridgeStateError;
+        case PlayerState::Idle:      return PlayerBridgeStateIdle;
+        case PlayerState::Loading:   return PlayerBridgeStateLoading;
+        case PlayerState::Playing:   return PlayerBridgeStatePlaying;
+        case PlayerState::Paused:    return PlayerBridgeStatePaused;
+        case PlayerState::Seeking:   return PlayerBridgeStateSeeking;
+        case PlayerState::Buffering: return PlayerBridgeStateLoading;
+        case PlayerState::Stopped:   return PlayerBridgeStateStopped;
+        case PlayerState::Error:     return PlayerBridgeStateError;
     }
 }
 
