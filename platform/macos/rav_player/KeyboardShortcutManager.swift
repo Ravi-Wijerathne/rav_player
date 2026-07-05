@@ -8,6 +8,8 @@ class KeyboardShortcutManager {
     var onPlayPause: (() -> Void)?
     var onSeekForward: (() -> Void)?
     var onSeekBackward: (() -> Void)?
+    var onToggleInfo: (() -> Void)?
+    var onTogglePlaylist: (() -> Void)?
 
     private init() {}
 
@@ -43,6 +45,12 @@ class KeyboardShortcutManager {
             return nil // Consume event
         case kVK_RightArrow:
             onSeekForward?()
+            return nil // Consume event
+        case kVK_ANSI_I:
+            onToggleInfo?()
+            return nil // Consume event
+        case kVK_ANSI_L:
+            onTogglePlaylist?()
             return nil // Consume event
         default:
             return event

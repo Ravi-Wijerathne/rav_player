@@ -7,6 +7,7 @@ struct PlayerView: View {
     @State private var dragTime: Double = 0
     @State private var osdText: String?
     @State private var osdTimer: Timer?
+    @State private var showInfo: Bool = false
 
     var body: some View {
         ZStack {
@@ -32,6 +33,10 @@ struct PlayerView: View {
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }
+
+            if showInfo {
+                infoOverlay
+            }
         }
         .onAppear {
             setupKeyboardShortcuts()
@@ -44,8 +49,12 @@ struct PlayerView: View {
     @ViewBuilder
     private var videoArea: some View {
         if viewModel.hasVideo {
-            MetalVideoView()
-                .aspectRatio(viewModel.videoAspectRatio, contentMode: .fit)
+            ZStack {
+                MetalVideoView()
+                    .aspectRatio(viewModel.videoAspectRatio, contentMode: .fit)
+
+                subtitleOverlay
+            }
         } else if viewModel.hasAudio {
             audioPlaceholder
         } else {
@@ -147,7 +156,14 @@ struct PlayerView: View {
     }
 
     private var playbackButtons: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
+            Button(action: { viewModel.previousTrack() }) {
+                Image(systemName: "backward.fill")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.hasPreviousTrack)
+
             Button(action: { viewModel.stop() }) {
                 Image(systemName: "stop.fill")
                     .font(.title3)
@@ -161,6 +177,20 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .disabled(!viewModel.isPlayable)
+
+            Button(action: { viewModel.nextTrack() }) {
+                Image(systemName: "forward.fill")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.hasNextTrack)
+
+            Button(action: { viewModel.togglePlaylist() }) {
+                Image(systemName: "list.bullet")
+                    .font(.title3)
+                    .foregroundColor(viewModel.showPlaylist ? .green : .white)
+            }
+            .buttonStyle(.plain)
         }
         .foregroundColor(.white)
     }
@@ -191,6 +221,86 @@ struct PlayerView: View {
         return String(format: "%d:%02d", m, s)
     }
 
+    @ViewBuilder
+    private var infoOverlay: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Media Info")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: { showInfo = false }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.gray)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.bottom, 4)
+
+            if !viewModel.mediaTitle.isEmpty {
+                infoRow(label: "Title", value: viewModel.mediaTitle)
+            }
+            if !viewModel.mediaArtist.isEmpty {
+                infoRow(label: "Artist", value: viewModel.mediaArtist)
+            }
+            if !viewModel.mediaAlbum.isEmpty {
+                infoRow(label: "Album", value: viewModel.mediaAlbum)
+            }
+            if !viewModel.videoCodecName.isEmpty {
+                infoRow(label: "Video", value: viewModel.videoCodecName)
+            }
+            if !viewModel.audioCodecName.isEmpty {
+                infoRow(label: "Audio", value: viewModel.audioCodecName)
+            }
+            if viewModel.mediaBitrate > 0 {
+                infoRow(label: "Bitrate", value: "\(viewModel.mediaBitrate / 1000) kbps")
+            }
+            infoRow(label: "Duration", value: formatTime(viewModel.duration))
+            infoRow(label: "Resolution",
+                    value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.75))
+        .cornerRadius(12)
+        .padding(40)
+        .allowsHitTesting(true)
+    }
+
+    private func infoRow(label: String, value: String) -> some View {
+        HStack(spacing: 8) {
+            Text(label + ":")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.gray)
+                .frame(width: 60, alignment: .trailing)
+            Text(value)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.white)
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var subtitleOverlay: some View {
+        if !viewModel.subtitleTexts.isEmpty {
+            VStack {
+                Spacer()
+                VStack(spacing: 4) {
+                    ForEach(viewModel.subtitleTexts, id: \.self) { text in
+                        Text(text)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .shadow(color: .black.opacity(0.9), radius: 3, x: 0, y: 1)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
+                .padding(.bottom, 24)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) {
         guard let provider = providers.first else { return }
         provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
@@ -216,6 +326,12 @@ struct PlayerView: View {
             let target = max(viewModel.currentTime - 10, 0)
             viewModel.seek(to: target)
             showOSD(text: "Backward 10s")
+        }
+        KeyboardShortcutManager.shared.onToggleInfo = {
+            showInfo.toggle()
+        }
+        KeyboardShortcutManager.shared.onTogglePlaylist = {
+            viewModel.togglePlaylist()
         }
         KeyboardShortcutManager.shared.startMonitoring()
     }

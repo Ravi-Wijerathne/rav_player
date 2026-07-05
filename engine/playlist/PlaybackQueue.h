@@ -40,6 +40,7 @@ public:
     void set_repeat(RepeatMode mode);
     RepeatMode repeat() const { return repeat_; }
 
+    const std::vector<PlaylistItem>& items() const { return items_; }
     size_t size() const { return items_.size(); }
     bool empty() const { return items_.empty(); }
 

@@ -74,6 +74,21 @@ public:
         return diff > 0 ? diff : 0.0;
     }
 
+    // Frame dropping logic: returns true if the frame at given PTS
+    // is too far behind and should be dropped.
+    bool should_drop_frame(double frame_pts, double drop_threshold = 0.1) const {
+        double master = sync_ref_ ? sync_ref_->elapsed() : pts();
+        double diff = master - frame_pts;
+        return diff > drop_threshold;
+    }
+
+    // Returns the drift between this clock and its reference.
+    // Positive means this clock is ahead of reference.
+    double drift() const {
+        if (!sync_ref_) return 0.0;
+        return pts() - sync_ref_->elapsed();
+    }
+
 private:
     std::atomic<double> pts_{0.0};
     double last_pts_{0.0};
