@@ -103,18 +103,19 @@ class PlayerViewModel: ObservableObject {
     }
 
     func loadMedia(url: URL) {
-        currentURL = url.absoluteString
+        let pathStr = url.isFileURL ? url.path : url.absoluteString
+        currentURL = pathStr
         videoWidth = 0
         videoHeight = 0
         subtitleTexts = []
 
         // Add to playlist if not already present
-        let isInPlaylist = playlistItems.contains(where: { $0.uri == url.absoluteString })
+        let isInPlaylist = playlistItems.contains(where: { $0.uri == pathStr })
         if !isInPlaylist {
-            bridge.appendToPlaylist(url.absoluteString)
+            bridge.appendToPlaylist(pathStr)
         }
 
-        if bridge.open(url.absoluteString) {
+        if bridge.open(pathStr) {
             isPlayable = true
             duration = bridge.duration
             hasVideo = bridge.hasVideo
@@ -170,7 +171,7 @@ class PlayerViewModel: ObservableObject {
     // ── Playlist ──
 
     func addToPlaylist(url: URL) {
-        bridge.appendToPlaylist(url.absoluteString)
+        bridge.appendToPlaylist(url.isFileURL ? url.path : url.absoluteString)
         syncPlaylist()
     }
 
