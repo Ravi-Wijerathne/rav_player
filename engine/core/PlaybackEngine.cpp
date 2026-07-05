@@ -154,6 +154,7 @@ void PlaybackEngine::play() {
     video_clock_.reset();
     video_clock_.start();
     audio_started_ = false;
+    video_clock_locked_ = false;
 
     if (audio_output_ && audio_stream_ >= 0) {
         AudioOutputSpec spec;
@@ -163,7 +164,9 @@ void PlaybackEngine::play() {
         auto* par = stream->codecpar;
         spec.channels = par->ch_layout.nb_channels;
         spec.channel_layout = par->ch_layout.u.mask;
-        audio_output_->init(spec);
+        bool ok = audio_output_->init(spec);
+        fprintf(stderr, "play: audio_init(sr=%d ch=%d) -> %d\n",
+                spec.sample_rate, spec.channels, ok);
         audio_output_->set_fill_callback([this](uint8_t* data, int frames) {
             return fill_audio_buffer(data, frames);
         });
@@ -238,6 +241,7 @@ void PlaybackEngine::stop() {
         flush_buffers();
         audio_clock_.reset();
         video_clock_.reset();
+        video_clock_locked_ = false;
         set_state(PlayerState::Stopped);
     }
     event_bus_.publish(PlaybackEndedEvent{});
@@ -259,10 +263,11 @@ int PlaybackEngine::fill_audio_buffer(uint8_t* data, int frames_requested) {
 
     while (total_frames < frames_requested) {
         if (leftover_audio_frames_ <= 0) {
-            if (!audio_queue_.try_pop(current_audio_frame_, 100)) break;
+            if (!audio_queue_.try_pop(current_audio_frame_, 0)) break;
             if (current_audio_frame_.planar_data.empty()) continue;
             leftover_audio_frames_ = current_audio_frame_.nb_samples;
             leftover_audio_offset_ = 0;
+            audio_clock_.set_pts(current_audio_frame_.pts);
         }
 
         int copy_frames = std::min(leftover_audio_frames_, frames_requested - total_frames);
@@ -282,6 +287,8 @@ int PlaybackEngine::fill_audio_buffer(uint8_t* data, int frames_requested) {
         int silence_bytes = (frames_requested - total_frames) * bytes_per_frame;
         std::memset(data + total_frames * bytes_per_frame, 0, silence_bytes);
         audio_clock_.add_bytes_consumed(silence_bytes); // Advance clock even on silence to prevent freezing
+        static int once = 0; if (++once <= 3) fprintf(stderr, "fill_audio_buffer: SILENCE filled %d/%d frames (aq size=%zu)\n",
+              frames_requested - total_frames, frames_requested, audio_queue_.size());
     }
 
     return frames_requested;
@@ -291,14 +298,23 @@ bool PlaybackEngine::sync_pop_video_frame(VideoFrame& out) {
     if (!has_video()) return false;
     double current = current_time();
 
-    // Drop frames that are too far behind current time
-    const double drop_threshold = 0.1; // 100ms
+    static int diag_cnt = 0;
+    const double drop_threshold = 0.3;
     while (true) {
         double front_pts = video_queue_.front_pts();
-        if (front_pts < 0) return false;
-        if (video_clock_.should_drop_frame(front_pts, drop_threshold)) {
+        if (front_pts < 0) {
+            if (++diag_cnt % 30 == 1)
+                fprintf(stderr, "sync_pop: front_pts < 0 (empty queue?)\n");
+            return false;
+        }
+        // Only drop frames after the video clock has been locked by a popped frame.
+        // Before that, video_clock_ is just wall-clock elapsed since startup, not
+        // actual playback position.
+        if (video_clock_locked_ && current - front_pts > drop_threshold) {
             VideoFrame dropped;
             if (!video_queue_.try_pop(dropped, 0)) break;
+            if (++diag_cnt % 30 == 1)
+                fprintf(stderr, "sync_pop: dropped frame pts=%.3f\n", dropped.pts);
             continue;
         }
         break;
@@ -309,8 +325,13 @@ bool PlaybackEngine::sync_pop_video_frame(VideoFrame& out) {
     if (front_pts <= current + 0.001) {
         if (video_queue_.try_pop(out, 0)) {
             video_clock_.set_pts(out.pts, 0);
+            video_clock_locked_ = true;
+            if (++diag_cnt % 30 == 1)
+                fprintf(stderr, "sync_pop: popped frame pts=%.3f current=%.3f\n", out.pts, current);
             return true;
         }
+    } else if (++diag_cnt % 30 == 1) {
+        fprintf(stderr, "sync_pop: front_pts=%.3f > current=%.3f (not ready yet)\n", front_pts, current);
     }
     return false;
 }
@@ -454,13 +475,14 @@ void PlaybackEngine::demux_thread_fn() {
             if (packet) {
                 av_packet_move_ref(packet.get(), pkt);
 
-                if (pkt->stream_index == video_stream_) {
+                int si = packet->stream_index;
+                if (si == video_stream_) {
                     video_packet_queue_.push(std::move(packet));
-                } else if (pkt->stream_index == audio_stream_) {
+                } else if (si == audio_stream_) {
                     audio_packet_queue_.push(std::move(packet));
-                } else if (pkt->stream_index == subtitle_stream_) {
+                } else if (si == subtitle_stream_) {
                     double tb = av_q2d(reader_.context()->streams[subtitle_stream_]->time_base);
-                    auto subs = subtitle_decoder_.decode(pkt, tb);
+                    auto subs = subtitle_decoder_.decode(packet.get(), tb);
                     for (auto& ds : subs) {
                         subtitle_queue_.push(std::move(ds.frame));
                     }
@@ -537,6 +559,12 @@ void PlaybackEngine::video_decode_thread_fn() {
                 video_width_ = vf.width;
                 video_height_ = vf.height;
             }
+            // Throttle decode: pause when the queue is full to avoid dropping frames
+            while (video_queue_.size() >= 30 && running_ && !seek_requested_) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            if (!running_ || seek_requested_) break;
+            
             video_queue_.push(std::move(vf));
         }
     }
@@ -561,6 +589,12 @@ void PlaybackEngine::video_decode_thread_fn() {
         vf.pix_fmt = video_decoder_.pixel_format();
         vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
         vf.duration = 1.0 / 30.0;
+        
+        while (video_queue_.size() >= 30 && running_ && !seek_requested_) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (!running_ || seek_requested_) break;
+        
         video_queue_.push(std::move(vf));
     }
 }
@@ -608,6 +642,11 @@ void PlaybackEngine::audio_decode_thread_fn() {
             af.channel_layout = par->ch_layout.u.mask;
             af.duration = AudioFrame::duration_from_frame(frame.get());
 
+            while (audio_queue_.size() >= 30 && running_ && !seek_requested_) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            if (!running_ || seek_requested_) break;
+
             if (resample_audio(frame.get(), af.planar_data)) {
                 af.frame = std::move(frame);
                 audio_queue_.push(std::move(af));
@@ -635,6 +674,12 @@ void PlaybackEngine::audio_decode_thread_fn() {
         af.channels = par->ch_layout.nb_channels;
         af.channel_layout = par->ch_layout.u.mask;
         af.duration = AudioFrame::duration_from_frame(frame.get());
+        
+        while (audio_queue_.size() >= 30 && running_ && !seek_requested_) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (!running_ || seek_requested_) break;
+        
         if (resample_audio(frame.get(), af.planar_data)) {
             af.frame = std::move(frame);
             audio_queue_.push(std::move(af));

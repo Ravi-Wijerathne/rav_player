@@ -155,6 +155,7 @@ private:
     std::atomic<bool> seek_requested_{false};
     std::atomic<bool> flush_requested_{false};
     bool audio_started_{false};
+    bool video_clock_locked_{false};
     double seek_target_{0.0};
 
     SwrContext* swr_ctx_{nullptr};

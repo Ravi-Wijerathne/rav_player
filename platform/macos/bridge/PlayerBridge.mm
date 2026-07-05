@@ -330,9 +330,19 @@ using namespace rav;
     if (!_engine || !_renderer || !_renderer->is_ready()) return;
     if (_engine->state() != PlayerState::Playing) return;
 
+    static int frameCount = 0;
+    if (++frameCount % 30 == 1) {
+        NSLog(@"renderFrame: state=%d vq=%d aq=%d vw=%d vh=%d",
+              (int)_engine->state(), _engine->video_queue_size(),
+              _engine->audio_queue_size(), _engine->video_width(),
+              _engine->video_height());
+    }
+
     VideoFrame vf;
     if (_engine->sync_pop_video_frame(vf)) {
         _renderer->present_frame(vf);
+    } else if (frameCount % 30 == 1) {
+        NSLog(@"renderFrame: sync_pop_video_frame returned false");
     }
 }
 

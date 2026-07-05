@@ -200,9 +200,12 @@ public:
     }
 
     void renderYUV(id<MTLTexture> yTexture, id<MTLTexture> uvTexture, int rotation) {
-        if (!ready || !metalLayer || !yTexture || !uvTexture) return;
+        if (!ready || !metalLayer || !yTexture || !uvTexture) {
+            static int once = 0; if (++once == 1) NSLog(@"renderYUV: early return ready=%d layer=%p y=%p uv=%p", ready, metalLayer, yTexture, uvTexture);
+            return;
+        }
         id<MTLRenderPipelineState> ps = yuvPipelineState;
-        if (!ps) return;
+        if (!ps) { static int once = 0; if (++once == 1) NSLog(@"renderYUV: no pipeline"); return; }
 
         dispatch_semaphore_wait(inflightSemaphore, DISPATCH_TIME_FOREVER);
 
@@ -220,6 +223,7 @@ public:
 
             id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
             if (!drawable) {
+                static int once = 0; if (++once == 1) NSLog(@"renderYUV: nextDrawable returned nil");
                 [cmdBuffer commit];
                 return;
             }
@@ -375,6 +379,10 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
 
     bool isYUV = (frame.format == VideoFrameFormat::YUV420P ||
                   frame.format == VideoFrameFormat::NV12);
+
+    static int diag = 0; if (++diag % 30 == 1)
+        NSLog(@"present_frame: w=%d h=%d fmt=%d isYUV=%d",
+              w, h, (int)frame.format, isYUV);
 
     if (isYUV && frame.frame && impl_->yuvPipelineState) {
         int width = frame.frame->width;
