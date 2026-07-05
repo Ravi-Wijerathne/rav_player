@@ -4,6 +4,7 @@ add_executable(core_tests
     PlayerEventTest.cpp
     EventBusTest.cpp
     LoggerTest.cpp
+    PlaybackEngineTest.cpp
 )
 
 target_link_libraries(core_tests
