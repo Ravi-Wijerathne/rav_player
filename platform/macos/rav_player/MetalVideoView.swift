@@ -20,7 +20,7 @@ class MetalVideoNSView: NSView {
     let metalLayer = CAMetalLayer()
     weak var viewModel: PlayerViewModel?
     private var setupDone = false
-    private var displayLink: Any?
+    private var cvDisplayLink: CVDisplayLink?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -62,45 +62,22 @@ class MetalVideoNSView: NSView {
     }
 
     private func startDisplayLink() {
-        if #available(macOS 15.0, *) {
-            displayLink = self.displayLink(target: self, selector: #selector(renderDisplayLink(_:)))
-        } else {
-            // Fall back to CVDisplayLink for older macOS
-            startCVDisplayLink()
-        }
-    }
-
-    private func stopDisplayLink() {
-        if #available(macOS 15.0, *) {
-            if let link = displayLink as? NSObject {
-                link.perform(NSSelectorFromString("invalidate"))
-            }
-            displayLink = nil
-        }
-    }
-
-    @objc private func renderDisplayLink(_ sender: Any) {
-        viewModel?.renderFrame()
-    }
-
-    // Legacy CVDisplayLink support for macOS < 15
-    private var cvDisplayLink: CVDisplayLink?
-
-    private func startCVDisplayLink() {
-        stopCVDisplayLink()
+        stopDisplayLink()
         CVDisplayLinkCreateWithActiveCGDisplays(&cvDisplayLink)
         guard let link = cvDisplayLink else { return }
 
         let viewPtr = Unmanaged.passUnretained(self).toOpaque()
         CVDisplayLinkSetOutputHandler(link) { _, _, _, _, _ -> CVReturn in
             let view = Unmanaged<MetalVideoNSView>.fromOpaque(viewPtr).takeUnretainedValue()
-            view.viewModel?.renderFrame()
+            DispatchQueue.main.async {
+                view.viewModel?.renderFrame()
+            }
             return kCVReturnSuccess
         }
         CVDisplayLinkStart(link)
     }
 
-    private func stopCVDisplayLink() {
+    private func stopDisplayLink() {
         if let link = cvDisplayLink {
             CVDisplayLinkStop(link)
             cvDisplayLink = nil
