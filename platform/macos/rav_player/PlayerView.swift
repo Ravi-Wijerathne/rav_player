@@ -34,6 +34,20 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
             }
 
+            if let error = viewModel.errorMessage {
+                VStack {
+                    Text("Error")
+                        .font(.headline)
+                        .foregroundColor(.red)
+                    Text(error)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(.regularMaterial)
+                .cornerRadius(8)
+            }
+
             if showInfo {
                 infoOverlay
             }
@@ -151,6 +165,11 @@ struct PlayerView: View {
             Text(formatTime(viewModel.duration))
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(.gray)
+            if viewModel.isSeeking {
+                Text("Seeking...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .foregroundColor(.white)
     }

@@ -1,5 +1,4 @@
 add_library(rav_engine STATIC
-    dummy.cpp
     # core
     core/PlayerState.h
     core/PlayerCommand.h
@@ -34,7 +33,7 @@ target_include_directories(rav_engine
 # Each module will become its own target or be folded into rav_engine.
 # For now we add their include paths so code can reference them.
 set(ENGINE_MODULES
-    media ffmpeg video audio subtitles streaming
+    core media ffmpeg video audio subtitles streaming
     playlist metadata plugins platform rendering decoder
 )
 

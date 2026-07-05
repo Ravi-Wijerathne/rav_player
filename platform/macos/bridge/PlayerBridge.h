@@ -8,6 +8,7 @@ typedef NS_ENUM(NSInteger, PlayerBridgeState) {
     PlayerBridgeStateLoading,
     PlayerBridgeStatePlaying,
     PlayerBridgeStatePaused,
+    PlayerBridgeStateSeeking,
     PlayerBridgeStateStopped,
     PlayerBridgeStateError
 };
@@ -74,6 +75,10 @@ typedef NS_ENUM(NSInteger, PlayerRepeatMode) {
 - (void)setupMetalLayer:(void*)metalLayer width:(int)width height:(int)height;
 - (void)resizeMetal:(int)width height:(int)height;
 - (void)renderFrame;
+
+// Event polling & errors
+- (nullable NSString*)pollEvent;
+- (nullable NSString*)lastErrorMessage;
 
 @property (readonly) BOOL hasSubtitles;
 - (NSArray<NSString*>*)currentSubtitleTexts;

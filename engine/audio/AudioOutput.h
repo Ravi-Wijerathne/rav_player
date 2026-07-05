@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include "AudioFrame.h"
@@ -16,6 +17,9 @@ struct AudioOutputSpec {
 
 class AudioOutput {
 public:
+    using FillCallback = std::function<int(uint8_t*, int)>;
+    virtual void set_fill_callback(FillCallback) {}
+
     virtual ~AudioOutput() = default;
 
     virtual bool init(const AudioOutputSpec& spec) = 0;

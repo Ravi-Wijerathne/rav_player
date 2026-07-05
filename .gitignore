@@ -63,3 +63,8 @@ install_manifest.txt
 *.tmp
 *.temp
 *.pid
+
+#Others
+docs/superpowers
+.superpowers
+.superprojects
