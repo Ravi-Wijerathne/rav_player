@@ -23,7 +23,9 @@ public:
         if (ret < 0) return false;
 
         codec_ctx->hw_device_ctx = hw_device_ctx;
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(60, 0, 0)
         codec_ctx->hw_pix_fmt = AV_PIX_FMT_VIDEOTOOLBOX;
+#endif
         return true;
     }
 

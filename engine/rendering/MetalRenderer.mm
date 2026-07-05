@@ -358,6 +358,7 @@ bool MetalRenderer::init() {
 }
 
 void MetalRenderer::shutdown() {
+    if (!impl_) return;
     impl_->frame_converter_.close();
     impl_->ready = false;
 }
