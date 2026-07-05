@@ -1,20 +1,43 @@
 #include <atomic>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "PlayerBridge.h"
 
 #include "../../../engine/core/PlaybackEngine.h"
 #include "../../../engine/rendering/MetalRenderer.h"
 #include "../../../engine/platform/MacOSAudioOutput.h"
+#include "../../../engine/playlist/PlaybackQueue.h"
+#include "../../../engine/playlist/PlaylistItem.h"
 
 using namespace rav;
+
+@implementation PlayerBridgePlaylistItem
+- (instancetype)initWithURI:(NSString*)uri title:(NSString*)title artist:(NSString*)artist duration:(double)duration {
+    self = [super init];
+    if (self) {
+        _uri = uri;
+        _title = title;
+        _artist = artist;
+        _duration = duration;
+    }
+    return self;
+}
+@end
 
 @interface PlayerBridge () {
     std::unique_ptr<PlaybackEngine> _engine;
     std::unique_ptr<MetalRenderer> _renderer;
     std::unique_ptr<MacOSAudioOutput> _audioOutput;
+    std::unique_ptr<PlaybackQueue> _playbackQueue;
     dispatch_queue_t _renderQueue;
+    NSMutableArray<PlayerBridgePlaylistItem*>* _playlistItems;
+    NSString* _currentURL;
 }
+
+- (void)syncPlaylistItems;
+- (void)openCurrentItem;
 @end
 
 @implementation PlayerBridge
@@ -25,6 +48,8 @@ using namespace rav;
         _engine = std::make_unique<PlaybackEngine>();
         _renderer = std::make_unique<MetalRenderer>();
         _audioOutput = std::make_unique<MacOSAudioOutput>();
+        _playbackQueue = std::make_unique<PlaybackQueue>();
+        _playlistItems = [NSMutableArray array];
         _renderQueue = dispatch_queue_create("com.ravplayer.render", DISPATCH_QUEUE_SERIAL);
 
         __weak PlayerBridge* weakSelf = self;
@@ -45,8 +70,13 @@ using namespace rav;
     _engine->set_audio_output(_audioOutput.get());
 
     BOOL result = _engine->open(path) ? YES : NO;
+    if (result) {
+        _currentURL = url;
+    }
     return result;
 }
+
+- (NSString*)currentURL { return _currentURL ?: @""; }
 
 - (void)play {
     _engine->play();
@@ -100,6 +130,164 @@ using namespace rav;
 - (void)resizeMetal:(int)width height:(int)height {
     if (!_renderer) return;
     _renderer->resize(width, height);
+}
+
+- (NSString*)mediaTitle {
+    return _engine ? [NSString stringWithUTF8String:_engine->media_title().c_str()] : @"";
+}
+- (NSString*)mediaArtist {
+    return _engine ? [NSString stringWithUTF8String:_engine->media_artist().c_str()] : @"";
+}
+- (NSString*)mediaAlbum {
+    return _engine ? [NSString stringWithUTF8String:_engine->media_album().c_str()] : @"";
+}
+- (int)mediaBitrate { return _engine ? _engine->media_bitrate() : 0; }
+- (NSString*)videoCodecName {
+    return _engine ? [NSString stringWithUTF8String:_engine->video_codec_name().c_str()] : @"";
+}
+- (NSString*)audioCodecName {
+    return _engine ? [NSString stringWithUTF8String:_engine->audio_codec_name().c_str()] : @"";
+}
+
+- (BOOL)hasSubtitles {
+    return _engine ? _engine->has_subtitles() ? YES : NO : NO;
+}
+
+- (NSArray<NSString*>*)currentSubtitleTexts {
+    if (!_engine) return @[];
+    auto subs = _engine->current_subtitles();
+    if (subs.empty()) return @[];
+    NSMutableArray* result = [NSMutableArray arrayWithCapacity:subs.size()];
+    for (const auto& sub : subs) {
+        if (!sub.text.empty()) {
+            NSString* text = [NSString stringWithUTF8String:sub.text.c_str()];
+            if (text) [result addObject:text];
+        }
+    }
+    return result;
+}
+
+// ── Playlist Management ──
+
+- (void)appendToPlaylist:(NSString*)url {
+    std::string path = url.UTF8String ?: "";
+    if (path.empty()) return;
+
+    PlaylistItem item;
+    item.uri = path;
+
+    // Extract a basic title from filename
+    auto pos = path.find_last_of("/\\");
+    if (pos != std::string::npos) {
+        item.title = path.substr(pos + 1);
+    } else {
+        item.title = path;
+    }
+    // Remove file extension for display
+    auto dot = item.title.find_last_of('.');
+    if (dot != std::string::npos) {
+        item.title = item.title.substr(0, dot);
+    }
+
+    _playbackQueue->add_item(item);
+    [self syncPlaylistItems];
+}
+
+- (void)playPlaylistItemAtIndex:(NSInteger)index {
+    if (index < 0 || index >= (NSInteger)_playbackQueue->size()) return;
+    _playbackQueue->go_to((size_t)index);
+    [self openCurrentItem];
+}
+
+- (void)nextTrack {
+    if (!_playbackQueue->has_next()) return;
+    _playbackQueue->next();
+    [self openCurrentItem];
+}
+
+- (void)previousTrack {
+    if (!_playbackQueue->has_previous()) return;
+    const auto& current = _playbackQueue->current();
+    _playbackQueue->previous();
+    [self openCurrentItem];
+}
+
+- (void)removeFromPlaylistAtIndex:(NSInteger)index {
+    if (index < 0 || index >= (NSInteger)_playbackQueue->size()) return;
+    _playbackQueue->remove_item((size_t)index);
+    [self syncPlaylistItems];
+}
+
+- (void)clearPlaylist {
+    _playbackQueue->clear();
+    [self syncPlaylistItems];
+}
+
+- (void)setShuffle:(BOOL)enabled {
+    _playbackQueue->set_shuffle(enabled == YES);
+}
+
+- (void)setRepeatMode:(PlayerRepeatMode)mode {
+    switch (mode) {
+        case PlayerRepeatModeNone: _playbackQueue->set_repeat(rav::RepeatMode::None); break;
+        case PlayerRepeatModeOne:  _playbackQueue->set_repeat(rav::RepeatMode::One); break;
+        case PlayerRepeatModeAll:  _playbackQueue->set_repeat(rav::RepeatMode::All); break;
+    }
+}
+
+- (NSArray<PlayerBridgePlaylistItem*>*)playlistItems {
+    return _playlistItems;
+}
+
+- (NSInteger)currentPlaylistIndex {
+    return _playbackQueue ? (NSInteger)_playbackQueue->current_index() : -1;
+}
+
+- (BOOL)hasNextTrack {
+    return _playbackQueue ? _playbackQueue->has_next() : NO;
+}
+
+- (BOOL)hasPreviousTrack {
+    return _playbackQueue ? _playbackQueue->has_previous() : NO;
+}
+
+- (BOOL)shuffleEnabled {
+    return _playbackQueue ? (_playbackQueue->shuffle() ? YES : NO) : NO;
+}
+
+- (PlayerRepeatMode)repeatMode {
+    if (!_playbackQueue) return PlayerRepeatModeNone;
+    switch (_playbackQueue->repeat()) {
+        case rav::RepeatMode::None: return PlayerRepeatModeNone;
+        case rav::RepeatMode::One:  return PlayerRepeatModeOne;
+        case rav::RepeatMode::All:  return PlayerRepeatModeAll;
+    }
+}
+
+// ── Internal Helpers ──
+
+- (void)syncPlaylistItems {
+    [_playlistItems removeAllObjects];
+    if (!_playbackQueue) return;
+
+    for (const auto& item : _playbackQueue->items()) {
+        PlayerBridgePlaylistItem* objcItem =
+            [[PlayerBridgePlaylistItem alloc] initWithURI:[NSString stringWithUTF8String:item.uri.c_str()]
+                                                    title:[NSString stringWithUTF8String:item.title.c_str()]
+                                                   artist:[NSString stringWithUTF8String:item.artist.c_str()]
+                                                 duration:std::chrono::duration<double>(item.duration).count()];
+        if (objcItem) {
+            [_playlistItems addObject:objcItem];
+        }
+    }
+}
+
+- (void)openCurrentItem {
+    if (!_playbackQueue || _playbackQueue->empty()) return;
+    const auto& item = _playbackQueue->current();
+    NSString* url = [NSString stringWithUTF8String:item.uri.c_str()];
+    [self open:url];
+    [self play];
 }
 
 - (void)renderFrame {

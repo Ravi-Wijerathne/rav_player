@@ -12,6 +12,19 @@ typedef NS_ENUM(NSInteger, PlayerBridgeState) {
     PlayerBridgeStateError
 };
 
+typedef NS_ENUM(NSInteger, PlayerRepeatMode) {
+    PlayerRepeatModeNone,
+    PlayerRepeatModeOne,
+    PlayerRepeatModeAll
+};
+
+@interface PlayerBridgePlaylistItem : NSObject
+@property (readonly) NSString* uri;
+@property (readonly) NSString* title;
+@property (readonly) NSString* artist;
+@property (readonly) double duration;
+@end
+
 @interface PlayerBridge : NSObject
 
 - (instancetype)init;
@@ -22,7 +35,16 @@ typedef NS_ENUM(NSInteger, PlayerBridgeState) {
 - (void)stop;
 - (void)close;
 
+// Playlist management
+- (void)appendToPlaylist:(NSString*)url NS_SWIFT_NAME(appendToPlaylist(_:));
+- (void)playPlaylistItemAtIndex:(NSInteger)index;
+- (void)nextTrack;
+- (void)previousTrack;
+- (void)removeFromPlaylistAtIndex:(NSInteger)index;
+- (void)clearPlaylist;
+
 @property (readonly) PlayerBridgeState state;
+@property (readonly) NSString* currentURL;
 @property (readonly) double duration;
 @property (readonly) double currentTime;
 @property float volume;
@@ -33,9 +55,28 @@ typedef NS_ENUM(NSInteger, PlayerBridgeState) {
 @property (readonly) int videoWidth;
 @property (readonly) int videoHeight;
 
+@property (readonly) NSArray<PlayerBridgePlaylistItem*>* playlistItems;
+@property (readonly) NSInteger currentPlaylistIndex;
+@property (readonly) BOOL hasNextTrack;
+@property (readonly) BOOL hasPreviousTrack;
+@property (readonly) BOOL shuffleEnabled;
+@property (readonly) PlayerRepeatMode repeatMode;
+- (void)setShuffle:(BOOL)enabled;
+- (void)setRepeatMode:(PlayerRepeatMode)mode;
+
+@property (readonly, copy) NSString* mediaTitle;
+@property (readonly, copy) NSString* mediaArtist;
+@property (readonly, copy) NSString* mediaAlbum;
+@property (readonly) int mediaBitrate;
+@property (readonly, copy) NSString* videoCodecName;
+@property (readonly, copy) NSString* audioCodecName;
+
 - (void)setupMetalLayer:(void*)metalLayer width:(int)width height:(int)height;
 - (void)resizeMetal:(int)width height:(int)height;
 - (void)renderFrame;
+
+@property (readonly) BOOL hasSubtitles;
+- (NSArray<NSString*>*)currentSubtitleTexts;
 
 @end
 

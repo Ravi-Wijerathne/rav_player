@@ -47,6 +47,7 @@ xcrun clang++ -x objective-c++ -std=c++20 \
     -I "$ROOT_DIR/engine/subtitles" \
     -I "$ROOT_DIR/engine/rendering" \
     -I "$ROOT_DIR/engine/platform" \
+    -I "$ROOT_DIR/engine/playlist" \
     -I "$FFMPEG_PREFIX/include" \
     -fobjc-arc \
     -c "$MACOS_DIR/bridge/PlayerBridge.mm" \
@@ -60,6 +61,7 @@ xcrun swiftc \
     "$MACOS_DIR/rav_player/KeyboardShortcutManager.swift" \
     "$MACOS_DIR/rav_player/MetalVideoView.swift" \
     "$MACOS_DIR/rav_player/PlayerViewModel.swift" \
+    "$MACOS_DIR/rav_player/PlaylistView.swift" \
     -import-objc-header "$MACOS_DIR/RavPlayer-Bridging-Header.h" \
     "$BRIDGE_OBJ" \
     -lc++ \

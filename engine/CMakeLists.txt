@@ -10,6 +10,9 @@ add_library(rav_engine STATIC
     utilities/RingBuffer.h
     utilities/ThreadPool.h
     utilities/Clock.h
+    utilities/SyncController.h
+    # decoder
+    decoder/PacketQueue.h
 )
 
 target_include_directories(rav_engine

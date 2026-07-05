@@ -9,6 +9,8 @@
 #include <thread>
 #include <vector>
 
+#include "../decoder/PacketQueue.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -33,6 +35,8 @@ extern "C" {
 #include "../audio/AudioClock.h"
 #include "../audio/AudioOutput.h"
 #include "../video/VideoRenderer.h"
+#include "../decoder/SubtitleDecoder.h"
+#include "../subtitles/SubtitleQueue.h"
 
 namespace rav {
 
@@ -64,14 +68,29 @@ public:
         duration_ = info.duration > 0
             ? static_cast<double>(info.duration) / AV_TIME_BASE : 0.0;
 
+        // Extract metadata
+        auto* fmt_ctx = reader_.context();
+        auto* dict = fmt_ctx->metadata;
+        auto read_tag = [&](const char* key) -> std::string {
+            auto* entry = av_dict_get(dict, key, nullptr, 0);
+            return entry ? entry->value : "";
+        };
+        media_title_ = read_tag("title");
+        media_artist_ = read_tag("artist");
+        media_album_ = read_tag("album");
+        media_bitrate_ = static_cast<int>(info.bit_rate);
+
         video_stream_ = -1;
         audio_stream_ = -1;
+        subtitle_stream_ = -1;
 
         for (const auto& s : info.streams) {
             if (s.type == AVMEDIA_TYPE_VIDEO && video_stream_ < 0)
                 video_stream_ = s.index;
             if (s.type == AVMEDIA_TYPE_AUDIO && audio_stream_ < 0)
                 audio_stream_ = s.index;
+            if (s.type == AVMEDIA_TYPE_SUBTITLE && subtitle_stream_ < 0)
+                subtitle_stream_ = s.index;
         }
 
         if (video_stream_ >= 0) {
@@ -90,6 +109,13 @@ public:
             }
         }
 
+        if (subtitle_stream_ >= 0) {
+            auto* stream = reader_.context()->streams[subtitle_stream_];
+            if (!subtitle_decoder_.open(stream->codecpar)) {
+                subtitle_stream_ = -1;
+            }
+        }
+
         if (video_stream_ < 0 && audio_stream_ < 0) {
             set_state(PlayerState::Error);
             return false;
@@ -105,8 +131,10 @@ public:
         reader_.close();
         video_decoder_.close();
         audio_decoder_.close();
+        subtitle_decoder_.close();
         video_queue_.reset();
         audio_queue_.reset();
+        subtitle_queue_.clear();
         leftover_audio_frames_ = 0;
         leftover_audio_offset_ = 0;
         current_audio_frame_ = AudioFrame();
@@ -115,6 +143,7 @@ public:
         duration_ = 0.0;
         video_stream_ = -1;
         audio_stream_ = -1;
+        subtitle_stream_ = -1;
         if (swr_ctx_) {
             swr_free(&swr_ctx_);
             swr_ctx_ = nullptr;
@@ -166,10 +195,21 @@ public:
 
         set_state(PlayerState::Playing);
         running_ = true;
-        if (playback_thread_.joinable()) {
-            playback_thread_.join();
+        flush_requested_ = false;
+
+        // Join any existing threads
+        if (playback_thread_.joinable()) playback_thread_.join();
+        if (video_decode_thread_.joinable()) video_decode_thread_.join();
+        if (audio_decode_thread_.joinable()) audio_decode_thread_.join();
+
+        // Start demuxer thread and decode threads
+        playback_thread_ = std::thread(&PlaybackEngine::demux_thread_fn, this);
+        if (video_stream_ >= 0) {
+            video_decode_thread_ = std::thread(&PlaybackEngine::video_decode_thread_fn, this);
         }
-        playback_thread_ = std::thread(&PlaybackEngine::playback_thread_fn, this);
+        if (audio_stream_ >= 0) {
+            audio_decode_thread_ = std::thread(&PlaybackEngine::audio_decode_thread_fn, this);
+        }
         event_bus_.publish(PlaybackStartedEvent{});
     }
 
@@ -204,9 +244,11 @@ public:
                 audio_output_->stop();
             }
         }
-        if (playback_thread_.joinable()) {
-            playback_thread_.join();
-        }
+        video_packet_queue_.drain();
+        audio_packet_queue_.drain();
+        if (playback_thread_.joinable()) playback_thread_.join();
+        if (video_decode_thread_.joinable()) video_decode_thread_.join();
+        if (audio_decode_thread_.joinable()) audio_decode_thread_.join();
         {
             std::lock_guard<std::mutex> lock(control_mutex_);
             if (audio_output_) {
@@ -228,6 +270,12 @@ public:
             return audio_clock_.pts();
         }
         return video_clock_.pts();
+    }
+
+    bool has_subtitles() const { return subtitle_stream_ >= 0; }
+
+    std::vector<SubtitleFrame> current_subtitles() {
+        return subtitle_queue_.subtitles_at_time(current_time());
     }
 
     void set_video_renderer(VideoRenderer* renderer) {
@@ -296,6 +344,20 @@ public:
     bool sync_pop_video_frame(VideoFrame& out) {
         if (!has_video()) return false;
         double current = current_time();
+
+        // Drop frames that are too far behind current time
+        const double drop_threshold = 0.1; // 100ms
+        while (true) {
+            double front_pts = video_queue_.front_pts();
+            if (front_pts < 0) return false;
+            if (video_clock_.should_drop_frame(front_pts, drop_threshold)) {
+                VideoFrame dropped;
+                if (!video_queue_.try_pop(dropped, 0)) break;
+                continue;
+            }
+            break;
+        }
+
         double front_pts = video_queue_.front_pts();
         if (front_pts < 0) return false;
         if (front_pts <= current + 0.001) {
@@ -313,6 +375,22 @@ public:
 
     bool try_pop_video_frame(VideoFrame& out, int timeout_ms = 0) {
         return video_queue_.try_pop(out, timeout_ms);
+    }
+
+    // Metadata accessors
+    std::string media_title() const { return media_title_; }
+    std::string media_artist() const { return media_artist_; }
+    std::string media_album() const { return media_album_; }
+    int media_bitrate() const { return media_bitrate_; }
+    std::string video_codec_name() {
+        if (video_stream_ < 0) return {};
+        auto* stream = reader_.context()->streams[video_stream_];
+        return stream->codecpar ? avcodec_get_name(stream->codecpar->codec_id) : "";
+    }
+    std::string audio_codec_name() {
+        if (audio_stream_ < 0) return {};
+        auto* stream = reader_.context()->streams[audio_stream_];
+        return stream->codecpar ? avcodec_get_name(stream->codecpar->codec_id) : "";
     }
 
     int video_width() const {
@@ -346,17 +424,30 @@ private:
     }
 
     void flush_buffers() {
+        video_packet_queue_.reset();
+        audio_packet_queue_.reset();
         video_queue_.reset();
         audio_queue_.reset();
+        subtitle_queue_.clear();
     }
 
     void handle_seek() {
         seek_requested_ = false;
+        flush_requested_ = true;
         set_state(PlayerState::Seeking);
+
+        // Drain packet queues to unblock decode threads
+        video_packet_queue_.drain();
+        audio_packet_queue_.drain();
+
+        // Wait for decode threads to notice flush_requested_
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
         flush_buffers();
         video_decoder_.close();
         audio_decoder_.close();
+        subtitle_decoder_.close();
+        subtitle_queue_.clear();
 
         if (video_stream_ >= 0) {
             auto* stream = reader_.context()->streams[video_stream_];
@@ -366,7 +457,12 @@ private:
             auto* stream = reader_.context()->streams[audio_stream_];
             audio_decoder_.open(stream->codecpar);
         }
+        if (subtitle_stream_ >= 0) {
+            auto* stream = reader_.context()->streams[subtitle_stream_];
+            subtitle_decoder_.open(stream->codecpar);
+        }
 
+        flush_requested_ = false;
         reader_.seek_to_time(seek_target_);
         audio_clock_.set_pts(seek_target_);
         video_clock_.set_pts(seek_target_, 0);
@@ -374,20 +470,17 @@ private:
         set_state(PlayerState::Playing);
     }
 
-    void playback_thread_fn() {
+    // ── Demuxer thread: reads packets and dispatches to packet queues ──
+    void demux_thread_fn() {
         AVPacket* pkt = av_packet_alloc();
         if (!pkt) { running_ = false; return; }
 
         bool eof_reached = false;
-        bool video_flushed = false;
-        bool audio_flushed = false;
 
         while (running_) {
             if (seek_requested_) {
                 handle_seek();
                 eof_reached = false;
-                video_flushed = false;
-                audio_flushed = false;
                 continue;
             }
 
@@ -396,9 +489,9 @@ private:
                 continue;
             }
 
-            // Rate limit decoding if queues are full
-            if ((video_stream_ >= 0 && video_queue_.size() >= 30) ||
-                (audio_stream_ >= 0 && audio_queue_.size() >= 30)) {
+            // Throttle demuxing if packet queues are full
+            if ((video_stream_ >= 0 && video_packet_queue_.size() >= 120) ||
+                (audio_stream_ >= 0 && audio_packet_queue_.size() >= 120)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
@@ -414,6 +507,9 @@ private:
                 if (ret < 0) {
                     if (ret == AVERROR_EOF) {
                         eof_reached = true;
+                        // Signal EOF to decode threads by draining their queues
+                        video_packet_queue_.drain();
+                        audio_packet_queue_.drain();
                     } else {
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
                         continue;
@@ -422,70 +518,19 @@ private:
             }
 
             if (!eof_reached) {
-                if (pkt->stream_index == video_stream_) {
-                    if (video_decoder_.send_packet(pkt)) {
-                        while (true) {
-                            auto frame = video_decoder_.receive_frame();
-                            if (!frame) break;
+                auto packet = PacketPtr(av_packet_alloc());
+                if (packet) {
+                    av_packet_move_ref(packet.get(), pkt);
 
-                            VideoFrame vf;
-                            vf.frame = std::move(frame);
-
-                            double pts = 0.0;
-                            if (vf.frame->pts != AV_NOPTS_VALUE) {
-                                pts = vf.frame->pts * av_q2d(reader_.context()->streams[video_stream_]->time_base);
-                            } else if (vf.frame->best_effort_timestamp != AV_NOPTS_VALUE) {
-                                pts = vf.frame->best_effort_timestamp * av_q2d(reader_.context()->streams[video_stream_]->time_base);
-                            } else {
-                                pts = pkt->pts * av_q2d(reader_.context()->streams[video_stream_]->time_base);
-                            }
-                            vf.pts = pts;
-
-                            vf.width = video_decoder_.width();
-                            vf.height = video_decoder_.height();
-                            vf.rotation = video_rotation_;
-                            vf.pix_fmt = video_decoder_.pixel_format();
-                            vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
-                            vf.duration = 1.0 / 30.0;
-                            if (video_width_ == 0) {
-                                video_width_ = vf.width;
-                                video_height_ = vf.height;
-                            }
-                            video_queue_.push(std::move(vf));
-                        }
-                    }
-                } else if (pkt->stream_index == audio_stream_) {
-                    if (audio_decoder_.send_packet(pkt)) {
-                        while (true) {
-                            auto frame = audio_decoder_.receive_frame();
-                            if (!frame) break;
-
-                            AudioFrame af;
-
-                            double pts = 0.0;
-                            if (frame->pts != AV_NOPTS_VALUE) {
-                                pts = frame->pts * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
-                            } else if (frame->best_effort_timestamp != AV_NOPTS_VALUE) {
-                                pts = frame->best_effort_timestamp * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
-                            } else {
-                                pts = pkt->pts * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
-                            }
-                            af.pts = pts;
-
-                            af.sample_rate = audio_decoder_.sample_rate();
-                            af.format = AV_SAMPLE_FMT_FLT;
-                            af.nb_samples = frame->nb_samples;
-
-                            auto* par = reader_.context()->streams[audio_stream_]->codecpar;
-                            af.channels = par->ch_layout.nb_channels;
-                            af.channel_layout = par->ch_layout.u.mask;
-
-                            af.duration = AudioFrame::duration_from_frame(frame.get());
-
-                            if (resample_audio(frame.get(), af.planar_data)) {
-                                af.frame = std::move(frame);
-                                audio_queue_.push(std::move(af));
-                            }
+                    if (pkt->stream_index == video_stream_) {
+                        video_packet_queue_.push(std::move(packet));
+                    } else if (pkt->stream_index == audio_stream_) {
+                        audio_packet_queue_.push(std::move(packet));
+                    } else if (pkt->stream_index == subtitle_stream_) {
+                        double tb = av_q2d(reader_.context()->streams[subtitle_stream_]->time_base);
+                        auto subs = subtitle_decoder_.decode(pkt, tb);
+                        for (auto& ds : subs) {
+                            subtitle_queue_.push(std::move(ds.frame));
                         }
                     }
                 }
@@ -493,76 +538,11 @@ private:
             }
 
             if (eof_reached) {
-                bool dynamic_work_done = false;
+                // Check if both decode queues are done
+                bool v_done = !video_packet_queue_.size() && video_queue_.empty();
+                bool a_done = !audio_packet_queue_.size() && audio_queue_.empty();
 
-                if (video_stream_ >= 0 && !video_flushed) {
-                    video_decoder_.send_packet(nullptr);
-                    while (true) {
-                        auto frame = video_decoder_.receive_frame();
-                        if (!frame) break;
-
-                        VideoFrame vf;
-                        vf.frame = std::move(frame);
-
-                        double pts = 0.0;
-                        if (vf.frame->pts != AV_NOPTS_VALUE) {
-                            pts = vf.frame->pts * av_q2d(reader_.context()->streams[video_stream_]->time_base);
-                        } else if (vf.frame->best_effort_timestamp != AV_NOPTS_VALUE) {
-                            pts = vf.frame->best_effort_timestamp * av_q2d(reader_.context()->streams[video_stream_]->time_base);
-                        }
-                        vf.pts = pts;
-
-                        vf.width = video_decoder_.width();
-                        vf.height = video_decoder_.height();
-                        vf.rotation = video_rotation_;
-                        vf.pix_fmt = video_decoder_.pixel_format();
-                        vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
-                        vf.duration = 1.0 / 30.0;
-                        video_queue_.push(std::move(vf));
-                        dynamic_work_done = true;
-                    }
-                    video_flushed = true;
-                }
-
-                if (audio_stream_ >= 0 && !audio_flushed) {
-                    audio_decoder_.send_packet(nullptr);
-                    while (true) {
-                        auto frame = audio_decoder_.receive_frame();
-                        if (!frame) break;
-
-                        AudioFrame af;
-
-                        double pts = 0.0;
-                        if (frame->pts != AV_NOPTS_VALUE) {
-                            pts = frame->pts * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
-                        } else if (frame->best_effort_timestamp != AV_NOPTS_VALUE) {
-                            pts = frame->best_effort_timestamp * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
-                        }
-                        af.pts = pts;
-
-                        af.sample_rate = audio_decoder_.sample_rate();
-                        af.format = AV_SAMPLE_FMT_FLT;
-                        af.nb_samples = frame->nb_samples;
-
-                        auto* par = reader_.context()->streams[audio_stream_]->codecpar;
-                        af.channels = par->ch_layout.nb_channels;
-                        af.channel_layout = par->ch_layout.u.mask;
-                        af.duration = AudioFrame::duration_from_frame(frame.get());
-
-                        if (resample_audio(frame.get(), af.planar_data)) {
-                            af.frame = std::move(frame);
-                            audio_queue_.push(std::move(af));
-                            dynamic_work_done = true;
-                        }
-                    }
-                    audio_flushed = true;
-                }
-
-                bool queues_empty = true;
-                if (video_stream_ >= 0 && !video_queue_.empty()) queues_empty = false;
-                if (audio_stream_ >= 0 && !audio_queue_.empty()) queues_empty = false;
-
-                if (queues_empty && video_flushed && audio_flushed) {
+                if (v_done && a_done) {
                     running_ = false;
                     if (audio_output_) {
                         audio_output_->stop();
@@ -572,13 +552,164 @@ private:
                     break;
                 }
 
-                if (!dynamic_work_done) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
 
         av_packet_free(&pkt);
+    }
+
+    // ── Video decode thread: decodes packets into frames ──
+    void video_decode_thread_fn() {
+        while (running_) {
+            if (flush_requested_) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+
+            PacketPtr pkt;
+            if (!video_packet_queue_.try_pop(pkt, 100)) {
+                continue;
+            }
+
+            // nullptr packet signals flush/drain
+            if (!pkt) continue;
+
+            if (seek_requested_) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+
+            if (!video_decoder_.send_packet(pkt.get())) continue;
+
+            while (running_ && !seek_requested_) {
+                auto frame = video_decoder_.receive_frame();
+                if (!frame) break;
+
+                VideoFrame vf;
+                vf.frame = std::move(frame);
+
+                double pts = 0.0;
+                if (vf.frame->pts != AV_NOPTS_VALUE) {
+                    pts = vf.frame->pts * av_q2d(reader_.context()->streams[video_stream_]->time_base);
+                } else if (vf.frame->best_effort_timestamp != AV_NOPTS_VALUE) {
+                    pts = vf.frame->best_effort_timestamp * av_q2d(reader_.context()->streams[video_stream_]->time_base);
+                }
+                vf.pts = pts;
+                vf.width = video_decoder_.width();
+                vf.height = video_decoder_.height();
+                vf.rotation = video_rotation_;
+                vf.pix_fmt = video_decoder_.pixel_format();
+                vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
+                vf.duration = 1.0 / 30.0;
+                if (video_width_ == 0) {
+                    video_width_ = vf.width;
+                    video_height_ = vf.height;
+                }
+                video_queue_.push(std::move(vf));
+            }
+        }
+
+        // Flush remaining frames from decoder
+        video_decoder_.send_packet(nullptr);
+        while (running_) {
+            auto frame = video_decoder_.receive_frame();
+            if (!frame) break;
+            VideoFrame vf;
+            vf.frame = std::move(frame);
+            double pts = 0.0;
+            if (vf.frame->pts != AV_NOPTS_VALUE) {
+                pts = vf.frame->pts * av_q2d(reader_.context()->streams[video_stream_]->time_base);
+            } else if (vf.frame->best_effort_timestamp != AV_NOPTS_VALUE) {
+                pts = vf.frame->best_effort_timestamp * av_q2d(reader_.context()->streams[video_stream_]->time_base);
+            }
+            vf.pts = pts;
+            vf.width = video_decoder_.width();
+            vf.height = video_decoder_.height();
+            vf.rotation = video_rotation_;
+            vf.pix_fmt = video_decoder_.pixel_format();
+            vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
+            vf.duration = 1.0 / 30.0;
+            video_queue_.push(std::move(vf));
+        }
+    }
+
+    // ── Audio decode thread: decodes and resamples packets ──
+    void audio_decode_thread_fn() {
+        while (running_) {
+            if (flush_requested_) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+
+            PacketPtr pkt;
+            if (!audio_packet_queue_.try_pop(pkt, 100)) {
+                continue;
+            }
+
+            if (!pkt) continue;
+
+            if (seek_requested_) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+
+            if (!audio_decoder_.send_packet(pkt.get())) continue;
+
+            while (running_ && !seek_requested_) {
+                auto frame = audio_decoder_.receive_frame();
+                if (!frame) break;
+
+                AudioFrame af;
+
+                double pts = 0.0;
+                if (frame->pts != AV_NOPTS_VALUE) {
+                    pts = frame->pts * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
+                } else if (frame->best_effort_timestamp != AV_NOPTS_VALUE) {
+                    pts = frame->best_effort_timestamp * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
+                }
+                af.pts = pts;
+                af.sample_rate = audio_decoder_.sample_rate();
+                af.format = AV_SAMPLE_FMT_FLT;
+                af.nb_samples = frame->nb_samples;
+
+                auto* par = reader_.context()->streams[audio_stream_]->codecpar;
+                af.channels = par->ch_layout.nb_channels;
+                af.channel_layout = par->ch_layout.u.mask;
+                af.duration = AudioFrame::duration_from_frame(frame.get());
+
+                if (resample_audio(frame.get(), af.planar_data)) {
+                    af.frame = std::move(frame);
+                    audio_queue_.push(std::move(af));
+                }
+            }
+        }
+
+        // Flush remaining frames
+        audio_decoder_.send_packet(nullptr);
+        while (running_) {
+            auto frame = audio_decoder_.receive_frame();
+            if (!frame) break;
+            AudioFrame af;
+            double pts = 0.0;
+            if (frame->pts != AV_NOPTS_VALUE) {
+                pts = frame->pts * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
+            } else if (frame->best_effort_timestamp != AV_NOPTS_VALUE) {
+                pts = frame->best_effort_timestamp * av_q2d(reader_.context()->streams[audio_stream_]->time_base);
+            }
+            af.pts = pts;
+            af.sample_rate = audio_decoder_.sample_rate();
+            af.format = AV_SAMPLE_FMT_FLT;
+            af.nb_samples = frame->nb_samples;
+            auto* par = reader_.context()->streams[audio_stream_]->codecpar;
+            af.channels = par->ch_layout.nb_channels;
+            af.channel_layout = par->ch_layout.u.mask;
+            af.duration = AudioFrame::duration_from_frame(frame.get());
+            if (resample_audio(frame.get(), af.planar_data)) {
+                af.frame = std::move(frame);
+                audio_queue_.push(std::move(af));
+            }
+        }
     }
 
     bool resample_audio(const AVFrame* frame, std::vector<uint8_t>& out_buffer) {
@@ -654,9 +785,14 @@ private:
     ContainerReader reader_;
     VideoDecoder video_decoder_;
     AudioDecoder audio_decoder_;
+    SubtitleDecoder subtitle_decoder_;
 
     FrameQueue video_queue_{30};
     AudioQueue audio_queue_{30};
+    SubtitleQueue subtitle_queue_;
+
+    PacketQueue video_packet_queue_{120};
+    PacketQueue audio_packet_queue_{120};
 
     AudioFrame current_audio_frame_;
     int leftover_audio_frames_{0};
@@ -670,6 +806,7 @@ private:
 
     int video_stream_{-1};
     int audio_stream_{-1};
+    int subtitle_stream_{-1};
 
     int video_width_{0};
     int video_height_{0};
@@ -679,8 +816,11 @@ private:
 
     std::mutex control_mutex_;
     std::thread playback_thread_;
+    std::thread video_decode_thread_;
+    std::thread audio_decode_thread_;
     std::atomic<bool> running_{false};
     std::atomic<bool> seek_requested_{false};
+    std::atomic<bool> flush_requested_{false};
     bool audio_started_{false};
     double seek_target_{0.0};
 
@@ -715,6 +855,11 @@ private:
     int last_in_sample_rate_{0};
     AVChannelLayout last_in_ch_layout_{};
     int video_rotation_{0};
+
+    std::string media_title_;
+    std::string media_artist_;
+    std::string media_album_;
+    int media_bitrate_{0};
 };
 
 } // namespace rav
