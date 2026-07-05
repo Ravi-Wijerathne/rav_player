@@ -7,7 +7,10 @@ struct Vertex {
 };
 
 struct Uniforms {
-    float4x4 transform;
+    float brightness;
+    float contrast;
+    float saturation;
+    float padding;
 };
 
 struct RasterizerData {
@@ -27,8 +30,7 @@ enum FragmentInputIndex {
 
 vertex RasterizerData
 vertexShader(uint vertexID [[vertex_id]],
-             constant Vertex *vertices [[buffer(VertexInputIndexVertices)]],
-             constant Uniforms &uniforms [[buffer(VertexInputIndexUniforms)]]) {
+             constant Vertex *vertices [[buffer(VertexInputIndexVertices)]]) {
     RasterizerData out;
     out.position = float4(vertices[vertexID].position, 0.0, 1.0);
     out.texcoord = vertices[vertexID].texcoord;
@@ -41,7 +43,11 @@ fragmentShader(RasterizerData in [[stage_in]],
                constant Uniforms &uniforms [[buffer(FragmentInputIndexUniforms)]]) {
     constexpr sampler sam(min_filter::linear, mag_filter::linear, mip_filter::none);
     float4 color = texture.sample(sam, in.texcoord);
-    return color;
+    color.rgb = (color.rgb - 0.5) * uniforms.contrast + 0.5;
+    color.rgb += uniforms.brightness;
+    float luminance = dot(color.rgb, float3(0.299, 0.587, 0.114));
+    color.rgb = mix(float3(luminance), color.rgb, uniforms.saturation + 1.0);
+    return float4(color.rgb, 1.0);
 }
 
 fragment float4
