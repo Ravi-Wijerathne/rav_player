@@ -186,6 +186,9 @@ public:
             spec.channels = par->ch_layout.nb_channels;
             spec.channel_layout = par->ch_layout.u.mask;
             audio_output_->init(spec);
+            audio_output_->set_fill_callback([this](uint8_t* data, int frames) {
+                return fill_audio_buffer(data, frames);
+            });
 
             int bytes_per_sample = av_get_bytes_per_sample(AV_SAMPLE_FMT_FLT);
             if (bytes_per_sample <= 0) bytes_per_sample = 4;
