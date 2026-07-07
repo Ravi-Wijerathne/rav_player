@@ -138,14 +138,23 @@ struct PlayerView: View {
 
     private var seekBar: some View {
         Slider(
-            value: isDragging ? $dragTime : $viewModel.currentTime,
+            value: Binding(
+                get: { isDragging ? dragTime : viewModel.currentTime },
+                set: { newValue in
+                    if isDragging {
+                        dragTime = newValue
+                    } else {
+                        // For a single click on the track without dragging
+                        viewModel.seek(to: newValue)
+                    }
+                }
+            ),
             in: 0...max(viewModel.duration, 1),
             onEditingChanged: { editing in
+                isDragging = editing
                 if editing {
-                    isDragging = true
                     dragTime = viewModel.currentTime
                 } else {
-                    isDragging = false
                     viewModel.seek(to: dragTime)
                 }
             }

@@ -107,7 +107,13 @@ public:
             stream_index >= 0
                 ? fmt_ctx_->streams[stream_index]->time_base
                 : av_make_q(1, AV_TIME_BASE)));
-        return seek(stream_index, ts);
+        
+        if (stream_index >= 0 && fmt_ctx_->streams[stream_index]->start_time != AV_NOPTS_VALUE) {
+            ts += fmt_ctx_->streams[stream_index]->start_time;
+        }
+        
+        fprintf(stderr, "seek_to_time: seconds=%.3f stream_index=%d ts=%lld\n", seconds, stream_index, (long long)ts);
+        return seek(stream_index, ts, AVSEEK_FLAG_BACKWARD);
     }
 
 private:

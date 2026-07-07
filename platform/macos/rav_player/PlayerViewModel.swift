@@ -165,6 +165,7 @@ class PlayerViewModel: ObservableObject {
     }
 
     func seek(to seconds: Double) {
+        print("PlayerViewModel: seeking to \(seconds)")
         bridge.seek(to: seconds)
     }
 
