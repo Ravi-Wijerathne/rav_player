@@ -417,7 +417,8 @@ void PlaybackEngine::handle_seek() {
     }
 
     flush_requested_ = false;
-    reader_.seek_to_time(seek_target_);
+    int seek_stream = video_stream_ >= 0 ? video_stream_ : audio_stream_;
+    reader_.seek_to_time(seek_target_, seek_stream);
     audio_clock_.set_pts(seek_target_);
     video_clock_.set_pts(seek_target_, 0);
 
