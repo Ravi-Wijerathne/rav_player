@@ -40,6 +40,9 @@ public:
         int ret = avcodec_parameters_to_context(codec_ctx_.get(), codecpar);
         if (ret < 0) return false;
 
+        codec_ctx_->thread_count = 0;
+        codec_ctx_->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+
         if (hw_decoder_) {
             hw_decoder_->init(codec_ctx_.get());
         }
