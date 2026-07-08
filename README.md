@@ -3,7 +3,7 @@
 RavPlayer is a high-performance, lightweight media player designed with a C++20 core playback engine, a native macOS Swift interface, and GPU-accelerated Metal rendering.
 
 > [!IMPORTANT]
-> **Platform Support:** Currently, only **macOS** is developed and supported.
+> **Platform Support:** Currently, only **macOS version** is developed and supported.
 
 ---
 
