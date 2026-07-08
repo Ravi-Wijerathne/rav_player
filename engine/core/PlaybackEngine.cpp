@@ -162,8 +162,8 @@ void PlaybackEngine::play() {
         spec.format = AV_SAMPLE_FMT_FLT; // Force float packed format
         auto* stream = reader_.context()->streams[audio_stream_];
         auto* par = stream->codecpar;
-        spec.channels = par->ch_layout.nb_channels;
-        spec.channel_layout = par->ch_layout.u.mask;
+        spec.channels = 2; // Force stereo downmix
+        spec.channel_layout = AV_CH_LAYOUT_STEREO;
         bool ok = audio_output_->init(spec);
         fprintf(stderr, "play: audio_init(sr=%d ch=%d) -> %d\n",
                 spec.sample_rate, spec.channels, ok);
@@ -255,8 +255,7 @@ int PlaybackEngine::fill_audio_buffer(uint8_t* data, int frames_requested) {
         AVSampleFormat fmt = AV_SAMPLE_FMT_FLT;
         bytes_per_frame = av_get_bytes_per_sample(fmt);
         if (bytes_per_frame <= 0) bytes_per_frame = 4;
-        auto* stream = reader_.context()->streams[audio_stream_];
-        bytes_per_frame *= stream->codecpar->ch_layout.nb_channels;
+        bytes_per_frame *= 2; // Forced stereo
     } else {
         bytes_per_frame = 8;
     }
@@ -638,9 +637,8 @@ void PlaybackEngine::audio_decode_thread_fn() {
             af.format = AV_SAMPLE_FMT_FLT;
             af.nb_samples = frame->nb_samples;
 
-            auto* par = reader_.context()->streams[audio_stream_]->codecpar;
-            af.channels = par->ch_layout.nb_channels;
-            af.channel_layout = par->ch_layout.u.mask;
+            af.channels = 2; // Forced stereo
+            af.channel_layout = AV_CH_LAYOUT_STEREO;
             af.duration = AudioFrame::duration_from_frame(frame.get());
 
             while (audio_queue_.size() >= 30 && running_ && !seek_requested_) {
@@ -671,9 +669,8 @@ void PlaybackEngine::audio_decode_thread_fn() {
         af.sample_rate = audio_decoder_.sample_rate();
         af.format = AV_SAMPLE_FMT_FLT;
         af.nb_samples = frame->nb_samples;
-        auto* par = reader_.context()->streams[audio_stream_]->codecpar;
-        af.channels = par->ch_layout.nb_channels;
-        af.channel_layout = par->ch_layout.u.mask;
+        af.channels = 2; // Forced stereo
+        af.channel_layout = AV_CH_LAYOUT_STEREO;
         af.duration = AudioFrame::duration_from_frame(frame.get());
         
         while (audio_queue_.size() >= 30 && running_ && !seek_requested_) {
@@ -714,7 +711,7 @@ bool PlaybackEngine::resample_audio(const AVFrame* frame, std::vector<uint8_t>& 
         last_in_sample_rate_ = frame->sample_rate;
 
         AVChannelLayout out_layout;
-        av_channel_layout_copy(&out_layout, &frame->ch_layout);
+        av_channel_layout_default(&out_layout, 2); // Force stereo downmix
 
         int ret = swr_alloc_set_opts2(&swr_ctx_,
                                       &out_layout, AV_SAMPLE_FMT_FLT, frame->sample_rate,
@@ -735,9 +732,9 @@ bool PlaybackEngine::resample_audio(const AVFrame* frame, std::vector<uint8_t>& 
     }
 
     int out_samples = frame->nb_samples;
-    int channels = frame->ch_layout.nb_channels;
+    int out_channels = 2; // Force stereo
     int bytes_per_sample = av_get_bytes_per_sample(AV_SAMPLE_FMT_FLT);
-    int out_size = out_samples * channels * bytes_per_sample;
+    int out_size = out_samples * out_channels * bytes_per_sample;
     out_buffer.resize(out_size);
 
     uint8_t* out_data[1] = { out_buffer.data() };
@@ -749,7 +746,7 @@ bool PlaybackEngine::resample_audio(const AVFrame* frame, std::vector<uint8_t>& 
     }
 
     if (ret < out_samples) {
-        out_buffer.resize(ret * channels * bytes_per_sample);
+        out_buffer.resize(ret * out_channels * bytes_per_sample);
     }
 
     return true;
