@@ -1,13 +1,18 @@
 # RavPlayer
 
-RavPlayer is a high-performance, lightweight media player designed with a C++20 core playback engine, a native macOS Swift interface, and GPU-accelerated Metal rendering.
+RavPlayer is a professional-grade, cross-platform media player designed with a **"Shared Media Engine + Native UI"** architecture. It is built to play virtually any media format while delivering a fully native user experience across multiple systems.
+
+### Project Goals & Architecture
+- **Shared Playback Engine:** Core playback logic, demuxing, decoding, synchronization, and streaming capabilities are written in C++20 for high performance and portability.
+- **Native Platform Integration:** Each platform uses native user interface libraries, window management, and native graphics APIs (e.g., Metal, Direct3D, OpenGL/Vulkan) for optimal integration.
+- **Target Platforms:** Designed to support macOS, Windows, Linux, Android, and iOS.
 
 > [!IMPORTANT]
-> **Platform Support:** Currently, only **macOS version** is developed and supported.
+> **Current Status:** Although the architecture is cross-platform, **only macOS is currently developed and supported**. Other platforms are planned for future iterations.
 
 ---
 
-## Features
+## Key Features
 
 - **C++20 Playback Engine:** Highly optimized core logic managing packet queues, demuxing, decoding, and synchronized audio/video loops.
 - **FFmpeg Integration:** Powered by FFmpeg libraries (`libavformat`, `libavcodec`, `libavutil`, `libswscale`, `libswresample`) for broad media format support.
@@ -15,6 +20,7 @@ RavPlayer is a high-performance, lightweight media player designed with a C++20 
 - **Metal Rendering:** GPU-accelerated video rendering using native Metal APIs and custom shaders for low CPU overhead.
 - **Low Latency Audio:** Native audio output driving synchronization using CoreAudio and AudioToolbox.
 - **Interactive Playlist & Shortcuts:** Supports list-based queuing, key binding management, and smooth playback actions.
+
 
 ---
 
