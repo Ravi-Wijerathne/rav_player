@@ -38,11 +38,15 @@ class MetalVideoNSView: NSView {
 
     private func setupLayer() {
         wantsLayer = true
+        layer = CALayer()
+        layer?.backgroundColor = NSColor.black.cgColor
+        
         metalLayer.device = MTLCreateSystemDefaultDevice()
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        layer = metalLayer
+        
+        layer?.addSublayer(metalLayer)
     }
 
     private func ensureMetalSetup() {
@@ -69,9 +73,7 @@ class MetalVideoNSView: NSView {
         let viewPtr = Unmanaged.passUnretained(self).toOpaque()
         CVDisplayLinkSetOutputHandler(link) { _, _, _, _, _ -> CVReturn in
             let view = Unmanaged<MetalVideoNSView>.fromOpaque(viewPtr).takeUnretainedValue()
-            DispatchQueue.main.async {
-                view.viewModel?.renderFrame()
-            }
+            view.viewModel?.renderFrame()
             return kCVReturnSuccess
         }
         CVDisplayLinkStart(link)

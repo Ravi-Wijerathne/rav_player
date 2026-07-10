@@ -18,7 +18,7 @@ BUILD_DIR="$ROOT_DIR/build"
 APP_DIR="$ROOT_DIR/platform/macos/rav_player.app"
 
 echo "=== Building Engine ==="
-cmake -B "$BUILD_DIR" -S "$ROOT_DIR" -DCMAKE_BUILD_TYPE=Debug
+cmake -B "$BUILD_DIR" -S "$ROOT_DIR" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=OFF
 cmake --build "$BUILD_DIR"
 
 ENGINE_LIB="$BUILD_DIR/engine/librav_engine.a"

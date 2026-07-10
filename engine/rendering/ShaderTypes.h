@@ -20,7 +20,7 @@ struct Uniforms {
     float brightness{0.0f};
     float contrast{1.0f};
     float saturation{0.0f};
-    float padding;
+    int is_hdr{0};
 };
 
 } // namespace rav

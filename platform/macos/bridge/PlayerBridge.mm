@@ -7,11 +7,17 @@
 
 #include "PlayerBridge.h"
 
+#define AVMediaType FF_AVMediaType
 #include "../../../engine/core/PlaybackEngine.h"
 #include "../../../engine/rendering/MetalRenderer.h"
 #include "../../../engine/platform/MacOSAudioOutput.h"
 #include "../../../engine/playlist/PlaybackQueue.h"
 #include "../../../engine/playlist/PlaylistItem.h"
+#include "../../../engine/rendering/FrameConverter.h"
+#undef AVMediaType
+
+#import <AVFoundation/AVFoundation.h>
+#import <CoreMedia/CoreMedia.h>
 
 using namespace rav;
 
@@ -28,6 +34,32 @@ using namespace rav;
 }
 @end
 
+@implementation PlayerBridgeSubtitle
+- (instancetype)initWithText:(NSString*)text {
+    self = [super init];
+    if (self) {
+        _text = text;
+        _isBitmap = NO;
+        _image = nil;
+    }
+    return self;
+}
+
+- (instancetype)initWithImage:(NSImage*)image x:(int)x y:(int)y width:(int)width height:(int)height {
+    self = [super init];
+    if (self) {
+        _text = @"";
+        _isBitmap = YES;
+        _image = image;
+        _x = x;
+        _y = y;
+        _width = width;
+        _height = height;
+    }
+    return self;
+}
+@end
+
 @interface PlayerBridge () {
     std::unique_ptr<PlaybackEngine> _engine;
     std::unique_ptr<MetalRenderer> _renderer;
@@ -37,6 +69,10 @@ using namespace rav;
     NSMutableArray<PlayerBridgePlaylistItem*>* _playlistItems;
     NSString* _currentURL;
     std::string _lastError;
+    
+    BOOL _isPiPActive;
+    AVSampleBufferDisplayLayer* _sampleBufferDisplayLayer;
+    std::unique_ptr<rav::FrameConverter> _pipConverter;
 }
 
 - (void)syncPlaylistItems;
@@ -54,6 +90,11 @@ using namespace rav;
         _playbackQueue = std::make_unique<PlaybackQueue>();
         _playlistItems = [NSMutableArray array];
         _renderQueue = dispatch_queue_create("com.ravplayer.render", DISPATCH_QUEUE_SERIAL);
+        _isPiPActive = NO;
+        _sampleBufferDisplayLayer = [[AVSampleBufferDisplayLayer alloc] init];
+        _sampleBufferDisplayLayer.videoGravity = AVLayerVideoGravityResizeAspect;
+        _sampleBufferDisplayLayer.frame = CGRectMake(0, 0, 1, 1);
+        _pipConverter = std::make_unique<rav::FrameConverter>();
 
         __weak PlayerBridge* weakSelf = self;
         _audioOutput->set_fill_callback([weakSelf](uint8_t* data, int frames) -> int {
@@ -110,6 +151,8 @@ using namespace rav;
     if (!_engine->event_bus().poll(event)) return nil;
 
     std::string eventName;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++17-extensions"
     std::visit([&eventName, self](const auto& e) {
         using T = std::decay_t<decltype(e)>;
         if constexpr (std::is_same_v<T, PlaybackStartedEvent>) eventName = "PlaybackStartedEvent";
@@ -125,6 +168,7 @@ using namespace rav;
         }
         else eventName = "Unknown";
     }, event);
+#pragma clang diagnostic pop
     return [NSString stringWithUTF8String:eventName.c_str()];
 }
 
@@ -156,16 +200,36 @@ using namespace rav;
 - (int)videoWidth { return _engine ? _engine->video_width() : 0; }
 - (int)videoHeight { return _engine ? _engine->video_height() : 0; }
 
-- (void)setupMetalLayer:(void*)metalLayer width:(int)width height:(int)height {
+- (void)setupMetalLayer:(void*)layerPtr width:(int)width height:(int)height {
     if (!_renderer) return;
-    _renderer->set_layer(metalLayer);
+    CAMetalLayer* layer = (__bridge CAMetalLayer*)layerPtr;
+    _renderer->set_layer((__bridge void*)layer);
     _renderer->resize(width, height);
     _renderer->init();
+    
+    // Ensure PiP layer is in the hierarchy to avoid crashes on restore
+    if (_sampleBufferDisplayLayer.superlayer != layer) {
+        CALayer *parentLayer = (__bridge CALayer*)layerPtr;
+        _sampleBufferDisplayLayer.frame = parentLayer.bounds;
+        _sampleBufferDisplayLayer.hidden = YES; // Hide initially until PiP starts
+        [parentLayer.superlayer insertSublayer:_sampleBufferDisplayLayer below:parentLayer];
+    }
+    _sampleBufferDisplayLayer.frame = layer.bounds;
 }
 
 - (void)resizeMetal:(int)width height:(int)height {
     if (!_renderer) return;
     _renderer->resize(width, height);
+    
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (_sampleBufferDisplayLayer.superlayer) {
+        CGRect b = _sampleBufferDisplayLayer.superlayer.bounds;
+        if (b.size.width < 1.0) b.size.width = 1.0;
+        if (b.size.height < 1.0) b.size.height = 1.0;
+        _sampleBufferDisplayLayer.frame = b;
+    }
+    [CATransaction commit];
 }
 
 - (NSString*)mediaTitle {
@@ -198,6 +262,46 @@ using namespace rav;
         if (!sub.text.empty()) {
             NSString* text = [NSString stringWithUTF8String:sub.text.c_str()];
             if (text) [result addObject:text];
+        }
+    }
+    return result;
+}
+
+- (NSArray<PlayerBridgeSubtitle*>*)currentSubtitles {
+    if (!_engine) return @[];
+    auto subs = _engine->current_subtitles();
+    if (subs.empty()) return @[];
+    
+    NSMutableArray* result = [NSMutableArray arrayWithCapacity:subs.size()];
+    for (const auto& sub : subs) {
+        if (sub.is_bitmap && !sub.bitmap_data.empty()) {
+            CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+            CGContextRef context = CGBitmapContextCreate(
+                (void*)sub.bitmap_data.data(),
+                sub.width,
+                sub.height,
+                8,
+                sub.width * 4,
+                colorSpace,
+                (CGBitmapInfo)kCGImageAlphaPremultipliedLast | (CGBitmapInfo)kCGBitmapByteOrder32Big
+            );
+            if (context) {
+                CGImageRef cgImage = CGBitmapContextCreateImage(context);
+                if (cgImage) {
+                    NSImage* image = [[NSImage alloc] initWithCGImage:cgImage size:NSMakeSize(sub.width, sub.height)];
+                    PlayerBridgeSubtitle* objcSub = [[PlayerBridgeSubtitle alloc] initWithImage:image x:sub.x y:sub.y width:sub.width height:sub.height];
+                    [result addObject:objcSub];
+                    CGImageRelease(cgImage);
+                }
+                CGContextRelease(context);
+            }
+            CGColorSpaceRelease(colorSpace);
+        } else if (!sub.text.empty()) {
+            NSString* text = [NSString stringWithUTF8String:sub.text.c_str()];
+            if (text) {
+                PlayerBridgeSubtitle* objcSub = [[PlayerBridgeSubtitle alloc] initWithText:text];
+                [result addObject:objcSub];
+            }
         }
     }
     return result;
@@ -341,9 +445,82 @@ using namespace rav;
     VideoFrame vf;
     if (_engine->sync_pop_video_frame(vf)) {
         _renderer->present_frame(vf);
+        
+        if (_isPiPActive && vf.frame) {
+            rav::FrameConverterSpec spec;
+            spec.src_width = vf.width;
+            spec.src_height = vf.height;
+            spec.src_format = vf.format == rav::VideoFrameFormat::YUV420P10 ? AV_PIX_FMT_YUV420P10LE : (vf.format == rav::VideoFrameFormat::NV12 ? AV_PIX_FMT_NV12 : AV_PIX_FMT_YUV420P);
+            // wait, we can just use vf.frame->format which is the raw AVPixelFormat!
+            spec.src_format = (AVPixelFormat)vf.frame->format;
+            
+            int max_pip_w = 854;
+            int dst_w = vf.width;
+            int dst_h = vf.height;
+            if (dst_w > max_pip_w) {
+                dst_h = (int)((float)dst_h * ((float)max_pip_w / (float)dst_w));
+                dst_w = max_pip_w;
+            }
+            spec.dst_width = dst_w;
+            spec.dst_height = dst_h;
+            spec.dst_format = AV_PIX_FMT_BGRA;
+            
+            if (_pipConverter->init(spec)) {
+                if (_pipConverter->convert_to_buffer(vf.frame.get())) {
+                    CVPixelBufferRef pixelBuffer = NULL;
+                    NSDictionary *options = @{
+                        (id)kCVPixelBufferCGImageCompatibilityKey: @YES,
+                        (id)kCVPixelBufferCGBitmapContextCompatibilityKey: @YES
+                    };
+                    CVReturn err = CVPixelBufferCreate(kCFAllocatorDefault, dst_w, dst_h,
+                                                       kCVPixelFormatType_32BGRA,
+                                                       (__bridge CFDictionaryRef)options,
+                                                       &pixelBuffer);
+                    if (err == kCVReturnSuccess) {
+                        CVPixelBufferLockBaseAddress(pixelBuffer, 0);
+                        uint8_t* dst = (uint8_t*)CVPixelBufferGetBaseAddress(pixelBuffer);
+                        size_t dstStride = CVPixelBufferGetBytesPerRow(pixelBuffer);
+                        uint8_t* src = _pipConverter->data();
+                        size_t srcStride = _pipConverter->linesize();
+                        for (int y = 0; y < dst_h; ++y) {
+                            memcpy(dst + y * dstStride, src + y * srcStride, dst_w * 4);
+                        }
+                        CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
+                        
+                        CMVideoFormatDescriptionRef videoInfo = NULL;
+                        CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, pixelBuffer, &videoInfo);
+                        
+                        CMSampleTimingInfo timing = { CMTimeMake(1, 60), CMTimeMake(vf.pts * 1000, 1000), kCMTimeInvalid };
+                        
+                        CMSampleBufferRef sampleBuffer = NULL;
+                        CMSampleBufferCreateReadyWithImageBuffer(kCFAllocatorDefault, pixelBuffer, videoInfo, &timing, &sampleBuffer);
+                        
+                        if (sampleBuffer) {
+                            if ([_sampleBufferDisplayLayer isReadyForMoreMediaData]) {
+                                [_sampleBufferDisplayLayer enqueueSampleBuffer:sampleBuffer];
+                            }
+                            CFRelease(sampleBuffer);
+                        }
+                        if (videoInfo) CFRelease(videoInfo);
+                        CVPixelBufferRelease(pixelBuffer);
+                    }
+                }
+            }
+        }
     } else if (frameCount % 30 == 1) {
         NSLog(@"renderFrame: sync_pop_video_frame returned false");
     }
+}
+
+- (void)startPiP {
+    _isPiPActive = YES;
+    _sampleBufferDisplayLayer.hidden = NO;
+}
+
+- (void)stopPiP {
+    _isPiPActive = NO;
+    [_sampleBufferDisplayLayer flushAndRemoveImage];
+    _sampleBufferDisplayLayer.hidden = YES;
 }
 
 @end

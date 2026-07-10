@@ -382,6 +382,10 @@ void PlaybackEngine::flush_buffers() {
     video_queue_.reset();
     audio_queue_.reset();
     subtitle_queue_.clear();
+    
+    leftover_audio_frames_ = 0;
+    leftover_audio_offset_ = 0;
+    current_audio_frame_ = AudioFrame();
 }
 
 void PlaybackEngine::handle_seek() {
@@ -397,23 +401,9 @@ void PlaybackEngine::handle_seek() {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
     flush_buffers();
-    video_decoder_.close();
-    audio_decoder_.close();
-    subtitle_decoder_.close();
-    subtitle_queue_.clear();
-
-    if (video_stream_ >= 0) {
-        auto* stream = reader_.context()->streams[video_stream_];
-        video_decoder_.open(stream->codecpar);
-    }
-    if (audio_stream_ >= 0) {
-        auto* stream = reader_.context()->streams[audio_stream_];
-        audio_decoder_.open(stream->codecpar);
-    }
-    if (subtitle_stream_ >= 0) {
-        auto* stream = reader_.context()->streams[subtitle_stream_];
-        subtitle_decoder_.open(stream->codecpar);
-    }
+    video_decoder_.flush();
+    audio_decoder_.flush();
+    subtitle_decoder_.flush();
 
     flush_requested_ = false;
     int seek_stream = video_stream_ >= 0 ? video_stream_ : audio_stream_;

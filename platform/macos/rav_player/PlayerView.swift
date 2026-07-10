@@ -219,6 +219,15 @@ struct PlayerView: View {
                     .foregroundColor(viewModel.showPlaylist ? .green : .white)
             }
             .buttonStyle(.plain)
+
+            if viewModel.canStartPiP {
+                Button(action: { viewModel.togglePiP() }) {
+                    Image(systemName: viewModel.isPiPActive ? "pip.exit" : "pip.enter")
+                        .font(.title3)
+                        .foregroundColor(viewModel.isPiPActive ? .blue : .white)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .foregroundColor(.white)
     }
@@ -309,21 +318,43 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var subtitleOverlay: some View {
-        if !viewModel.subtitleTexts.isEmpty {
-            VStack {
-                Spacer()
-                VStack(spacing: 4) {
-                    ForEach(viewModel.subtitleTexts, id: \.self) { text in
-                        Text(text)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                            .shadow(color: .black.opacity(0.9), radius: 3, x: 0, y: 1)
+        if !viewModel.subtitles.isEmpty {
+            GeometryReader { geo in
+                let scaleX = geo.size.width / CGFloat(max(1, viewModel.videoWidth))
+                let scaleY = geo.size.height / CGFloat(max(1, viewModel.videoHeight))
+                
+                ZStack(alignment: .topLeading) {
+                    // 1. Bitmap subtitles mapped by absolute coordinates
+                    ForEach(viewModel.subtitles.filter { $0.isBitmap }) { sub in
+                        if let img = sub.image {
+                            Image(nsImage: img)
+                                .resizable()
+                                .frame(width: CGFloat(sub.width) * scaleX, height: CGFloat(sub.height) * scaleY)
+                                .offset(x: CGFloat(sub.x) * scaleX, y: CGFloat(sub.y) * scaleY)
+                        }
+                    }
+                    
+                    // 2. Text subtitles stacked at the bottom
+                    let textSubs = viewModel.subtitles.filter { !$0.isBitmap && !$0.text.isEmpty }
+                    if !textSubs.isEmpty {
+                        VStack {
+                            Spacer()
+                            VStack(spacing: 4) {
+                                ForEach(textSubs) { sub in
+                                    Text(sub.text)
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.center)
+                                        .shadow(color: .black.opacity(0.9), radius: 3, x: 0, y: 1)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 8)
+                            .padding(.bottom, 24)
+                        }
+                        .frame(width: geo.size.width, height: geo.size.height)
                     }
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 8)
-                .padding(.bottom, 24)
             }
             .allowsHitTesting(false)
         }
