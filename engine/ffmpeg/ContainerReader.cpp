@@ -6,7 +6,18 @@ ContainerReader::ContainerReader() { ffmpeg_initialized(); }
 
 bool ContainerReader::open(const std::string& url) {
     AVFormatContext* ctx = nullptr;
-    int ret = avformat_open_input(&ctx, url.c_str(), nullptr, nullptr);
+    AVDictionary* options = nullptr;
+    
+    if (url.find("rtsp://") == 0) {
+        av_dict_set(&options, "rtsp_transport", "tcp", 0);
+        av_dict_set(&options, "timeout", "5000000", 0);
+    } else if (url.find(".ts") != std::string::npos || url.find(".m2ts") != std::string::npos) {
+        av_dict_set(&options, "probesize", "50000000", 0);
+        av_dict_set(&options, "analyzeduration", "10000000", 0);
+    }
+
+    int ret = avformat_open_input(&ctx, url.c_str(), nullptr, &options);
+    av_dict_free(&options);
     if (ret < 0 || !ctx) return false;
 
     fmt_ctx_.reset(ctx);

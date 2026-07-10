@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <CoreVideo/CoreVideo.h>
+#import <AppKit/AppKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -24,6 +25,16 @@ typedef NS_ENUM(NSInteger, PlayerRepeatMode) {
 @property (readonly) NSString* title;
 @property (readonly) NSString* artist;
 @property (readonly) double duration;
+@end
+
+@interface PlayerBridgeSubtitle : NSObject
+@property (readonly, copy) NSString* text;
+@property (readonly) BOOL isBitmap;
+@property (readonly, nullable) NSImage* image;
+@property (readonly) int x;
+@property (readonly) int y;
+@property (readonly) int width;
+@property (readonly) int height;
 @end
 
 @interface PlayerBridge : NSObject
@@ -81,7 +92,8 @@ typedef NS_ENUM(NSInteger, PlayerRepeatMode) {
 - (nullable NSString*)lastErrorMessage;
 
 @property (readonly) BOOL hasSubtitles;
-- (NSArray<NSString*>*)currentSubtitleTexts;
+- (NSArray<NSString*>*)currentSubtitleTexts; // Keep for backwards compatibility
+- (NSArray<PlayerBridgeSubtitle*>*)currentSubtitles;
 
 @end
 

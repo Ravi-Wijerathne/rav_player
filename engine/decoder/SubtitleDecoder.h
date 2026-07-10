@@ -113,8 +113,41 @@ public:
                         ds.frame.is_bitmap = true;
                         size_t bmp_size = rect->w * rect->h * 4;
                         ds.frame.bitmap_data.resize(bmp_size);
-                        std::memcpy(ds.frame.bitmap_data.data(),
-                                    rect->data[0], bmp_size);
+                        
+                        if (rect->nb_colors > 0 && rect->data[1]) {
+                            const uint32_t* pal = reinterpret_cast<const uint32_t*>(rect->data[1]);
+                            const uint8_t* src = rect->data[0];
+                            int src_linesize = rect->linesize[0];
+                            
+                            for (int y = 0; y < rect->h; ++y) {
+                                for (int x = 0; x < rect->w; ++x) {
+                                    uint8_t index = src[y * src_linesize + x];
+                                    uint32_t color = pal[index];
+                                    
+                                    // FFmpeg palette is ARGB in memory (A in highest byte)
+                                    uint8_t a = (color >> 24) & 0xFF;
+                                    uint8_t r = (color >> 16) & 0xFF;
+                                    uint8_t g = (color >> 8) & 0xFF;
+                                    uint8_t b = (color >> 0) & 0xFF;
+                                    
+                                    // CoreGraphics requires premultiplied alpha for RGBA
+                                    r = (r * a) / 255;
+                                    g = (g * a) / 255;
+                                    b = (b * a) / 255;
+                                    
+                                    // Store as RGBA byte array for easy creation of CGImage/NSImage
+                                    size_t out_offset = (y * rect->w + x) * 4;
+                                    ds.frame.bitmap_data[out_offset + 0] = r;
+                                    ds.frame.bitmap_data[out_offset + 1] = g;
+                                    ds.frame.bitmap_data[out_offset + 2] = b;
+                                    ds.frame.bitmap_data[out_offset + 3] = a;
+                                }
+                            }
+                        } else {
+                            // Fallback if no palette (unlikely for subtitles, but safe to handle)
+                            std::memset(ds.frame.bitmap_data.data(), 0, bmp_size);
+                        }
+                        
                         ds.frame.width = rect->w;
                         ds.frame.height = rect->h;
                         ds.frame.x = rect->x;

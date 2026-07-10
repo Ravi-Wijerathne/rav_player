@@ -32,6 +32,17 @@ enum RepeatMode: Int, CaseIterable {
     }
 }
 
+struct SubtitleItem: Identifiable {
+    let id = UUID()
+    let text: String
+    let isBitmap: Bool
+    let image: NSImage?
+    let x: Int
+    let y: Int
+    let width: Int
+    let height: Int
+}
+
 class PlayerViewModel: ObservableObject {
     @Published var state: PlayerBridgeState = .idle
     @Published var duration: Double = 0.0
@@ -44,7 +55,7 @@ class PlayerViewModel: ObservableObject {
     @Published var isPlayable: Bool = false
     @Published var videoWidth: Int = 0
     @Published var videoHeight: Int = 0
-    @Published var subtitleTexts: [String] = []
+    @Published var subtitles: [SubtitleItem] = []
     @Published var mediaTitle: String = ""
     @Published var mediaArtist: String = ""
     @Published var mediaAlbum: String = ""
@@ -107,7 +118,7 @@ class PlayerViewModel: ObservableObject {
         currentURL = pathStr
         videoWidth = 0
         videoHeight = 0
-        subtitleTexts = []
+        subtitles = []
 
         // Add to playlist if not already present
         let isInPlaylist = playlistItems.contains(where: { $0.uri == pathStr })
@@ -160,7 +171,7 @@ class PlayerViewModel: ObservableObject {
         bridge.stop()
         stopEventPolling()
         currentTime = 0
-        subtitleTexts = []
+        subtitles = []
         updateState()
     }
 
@@ -291,7 +302,20 @@ class PlayerViewModel: ObservableObject {
                     self.videoWidth = w
                     self.videoHeight = h
                 }
-                self.subtitleTexts = self.bridge.currentSubtitleTexts()
+                
+                let currentSubs = self.bridge.currentSubtitles()
+                self.subtitles = currentSubs.map { sub in
+                    SubtitleItem(
+                        text: sub.text,
+                        isBitmap: sub.isBitmap,
+                        image: sub.image,
+                        x: Int(sub.x),
+                        y: Int(sub.y),
+                        width: Int(sub.width),
+                        height: Int(sub.height)
+                    )
+                }
+                
                 self.updateState()
                 self.currentPlaylistIndex = self.bridge.currentPlaylistIndex
                 self.hasNextTrack = self.bridge.hasNextTrack

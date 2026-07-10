@@ -28,6 +28,32 @@ using namespace rav;
 }
 @end
 
+@implementation PlayerBridgeSubtitle
+- (instancetype)initWithText:(NSString*)text {
+    self = [super init];
+    if (self) {
+        _text = text;
+        _isBitmap = NO;
+        _image = nil;
+    }
+    return self;
+}
+
+- (instancetype)initWithImage:(NSImage*)image x:(int)x y:(int)y width:(int)width height:(int)height {
+    self = [super init];
+    if (self) {
+        _text = @"";
+        _isBitmap = YES;
+        _image = image;
+        _x = x;
+        _y = y;
+        _width = width;
+        _height = height;
+    }
+    return self;
+}
+@end
+
 @interface PlayerBridge () {
     std::unique_ptr<PlaybackEngine> _engine;
     std::unique_ptr<MetalRenderer> _renderer;
@@ -198,6 +224,46 @@ using namespace rav;
         if (!sub.text.empty()) {
             NSString* text = [NSString stringWithUTF8String:sub.text.c_str()];
             if (text) [result addObject:text];
+        }
+    }
+    return result;
+}
+
+- (NSArray<PlayerBridgeSubtitle*>*)currentSubtitles {
+    if (!_engine) return @[];
+    auto subs = _engine->current_subtitles();
+    if (subs.empty()) return @[];
+    
+    NSMutableArray* result = [NSMutableArray arrayWithCapacity:subs.size()];
+    for (const auto& sub : subs) {
+        if (sub.is_bitmap && !sub.bitmap_data.empty()) {
+            CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+            CGContextRef context = CGBitmapContextCreate(
+                (void*)sub.bitmap_data.data(),
+                sub.width,
+                sub.height,
+                8,
+                sub.width * 4,
+                colorSpace,
+                (CGBitmapInfo)kCGImageAlphaPremultipliedLast | (CGBitmapInfo)kCGBitmapByteOrder32Big
+            );
+            if (context) {
+                CGImageRef cgImage = CGBitmapContextCreateImage(context);
+                if (cgImage) {
+                    NSImage* image = [[NSImage alloc] initWithCGImage:cgImage size:NSMakeSize(sub.width, sub.height)];
+                    PlayerBridgeSubtitle* objcSub = [[PlayerBridgeSubtitle alloc] initWithImage:image x:sub.x y:sub.y width:sub.width height:sub.height];
+                    [result addObject:objcSub];
+                    CGImageRelease(cgImage);
+                }
+                CGContextRelease(context);
+            }
+            CGColorSpaceRelease(colorSpace);
+        } else if (!sub.text.empty()) {
+            NSString* text = [NSString stringWithUTF8String:sub.text.c_str()];
+            if (text) {
+                PlayerBridgeSubtitle* objcSub = [[PlayerBridgeSubtitle alloc] initWithText:text];
+                [result addObject:objcSub];
+            }
         }
     }
     return result;
