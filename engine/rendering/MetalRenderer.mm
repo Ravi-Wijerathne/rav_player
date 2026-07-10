@@ -129,7 +129,7 @@ public:
             desc.label = @"RGBA Pipeline";
             desc.vertexFunction = vertexFn;
             desc.fragmentFunction = fragmentFn;
-            desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+            desc.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA16Float;
 
             NSError* error = nil;
             pipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&error];
@@ -145,7 +145,7 @@ public:
             desc.label = @"YUV Pipeline";
             desc.vertexFunction = vertexFn;
             desc.fragmentFunction = yuvFragmentFn;
-            desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+            desc.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA16Float;
 
             NSError* error = nil;
             yuvPipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&error];
@@ -199,13 +199,25 @@ public:
                                             options:MTLResourceStorageModeShared];
     }
 
-    void renderYUV(id<MTLTexture> yTexture, id<MTLTexture> uvTexture, int rotation) {
+    void renderYUV(id<MTLTexture> yTexture, id<MTLTexture> uvTexture, int rotation, bool isHDR) {
         if (!ready || !metalLayer || !yTexture || !uvTexture) {
             static int once = 0; if (++once == 1) NSLog(@"renderYUV: early return ready=%d layer=%p y=%p uv=%p", ready, metalLayer, yTexture, uvTexture);
             return;
         }
         id<MTLRenderPipelineState> ps = yuvPipelineState;
         if (!ps) { static int once = 0; if (++once == 1) NSLog(@"renderYUV: no pipeline"); return; }
+
+        if (isHDR) {
+            static CGColorSpaceRef hdrSpace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
+            if (metalLayer.colorspace != hdrSpace) {
+                metalLayer.colorspace = hdrSpace;
+            }
+        } else {
+            static CGColorSpaceRef sdrSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+            if (metalLayer.colorspace != sdrSpace) {
+                metalLayer.colorspace = sdrSpace;
+            }
+        }
 
         dispatch_semaphore_wait(inflightSemaphore, DISPATCH_TIME_FOREVER);
 
@@ -254,6 +266,7 @@ public:
             [encoder setVertexBuffer:vBuf offset:0 atIndex:0];
 
             Uniforms uniforms;
+            uniforms.is_hdr = isHDR ? 1 : 0;
             [encoder setFragmentBytes:&uniforms length:sizeof(uniforms)
                               atIndex:FragmentInputIndexUniforms];
             [encoder setFragmentTexture:yTexture atIndex:0];
@@ -268,7 +281,7 @@ public:
         }
     }
 
-    void render(id<MTLTexture> texture, bool isYUV, int rotation) {
+    void render(id<MTLTexture> texture, bool isYUV, int rotation, bool isHDR) {
         if (!ready) {
             static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but not ready");
             return;
@@ -286,6 +299,18 @@ public:
         if (!ps) {
             static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but pipelineState is nil");
             return;
+        }
+
+        if (isHDR) {
+            static CGColorSpaceRef hdrSpace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
+            if (metalLayer.colorspace != hdrSpace) {
+                metalLayer.colorspace = hdrSpace;
+            }
+        } else {
+            static CGColorSpaceRef sdrSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+            if (metalLayer.colorspace != sdrSpace) {
+                metalLayer.colorspace = sdrSpace;
+            }
         }
 
         dispatch_semaphore_wait(inflightSemaphore, DISPATCH_TIME_FOREVER);
@@ -335,6 +360,7 @@ public:
             [encoder setVertexBuffer:vBuf offset:0 atIndex:0];
 
             Uniforms uniforms;
+            uniforms.is_hdr = isHDR ? 1 : 0;
             [encoder setFragmentBytes:&uniforms length:sizeof(uniforms)
                               atIndex:FragmentInputIndexUniforms];
             [encoder setFragmentTexture:texture atIndex:0];
@@ -378,7 +404,9 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
     if (w <= 0 || h <= 0) return false;
 
     bool isYUV = (frame.format == VideoFrameFormat::YUV420P ||
-                  frame.format == VideoFrameFormat::NV12);
+                  frame.format == VideoFrameFormat::NV12 ||
+                  frame.format == VideoFrameFormat::YUV420P10);
+    bool isHDR = (frame.format == VideoFrameFormat::YUV420P10);
 
     static int diag = 0; if (++diag % 30 == 1)
         NSLog(@"present_frame: w=%d h=%d fmt=%d isYUV=%d",
@@ -387,6 +415,37 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
     if (isYUV && frame.frame && impl_->yuvPipelineState) {
         int width = frame.frame->width;
         int height = frame.frame->height;
+        int uv_w = width / 2;
+        int uv_h = height / 2;
+
+        if (frame.format == VideoFrameFormat::YUV420P10) {
+            id<MTLTexture> yTex = impl_->acquireTexture(width, height, MTLPixelFormatR16Unorm);
+            if (!yTex) return false;
+            [yTex replaceRegion:MTLRegionMake2D(0, 0, width, height)
+                    mipmapLevel:0
+                      withBytes:frame.frame->data[0]
+                    bytesPerRow:frame.frame->linesize[0]];
+            
+            id<MTLTexture> uvTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatRG16Unorm);
+            if (!uvTex) return false;
+            
+            std::vector<uint16_t> uvInterleaved(uv_w * uv_h * 2);
+            for (int row = 0; row < uv_h; ++row) {
+                const uint16_t* uRow = (const uint16_t*)(frame.frame->data[1] + row * frame.frame->linesize[1]);
+                const uint16_t* vRow = (const uint16_t*)(frame.frame->data[2] + row * frame.frame->linesize[2]);
+                uint16_t* dst = uvInterleaved.data() + row * uv_w * 2;
+                for (int col = 0; col < uv_w; ++col) {
+                    dst[col * 2]     = uRow[col];
+                    dst[col * 2 + 1] = vRow[col];
+                }
+            }
+            [uvTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
+                     mipmapLevel:0
+                       withBytes:uvInterleaved.data()
+                     bytesPerRow:uv_w * 4];
+            impl_->renderYUV(yTex, uvTex, frame.rotation, isHDR);
+            return true;
+        }
 
         id<MTLTexture> yTex = impl_->acquireTexture(width, height, MTLPixelFormatR8Unorm);
         if (!yTex) return false;
@@ -395,8 +454,6 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                   withBytes:frame.frame->data[0]
                 bytesPerRow:frame.frame->linesize[0]];
 
-        int uv_w = width / 2;
-        int uv_h = height / 2;
         id<MTLTexture> uvTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatRG8Unorm);
         if (!uvTex) return false;
 
@@ -423,7 +480,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                      bytesPerRow:uv_w * 2];
         }
 
-        impl_->renderYUV(yTex, uvTex, frame.rotation);
+        impl_->renderYUV(yTex, uvTex, frame.rotation, isHDR);
         return true;
     }
 
@@ -456,7 +513,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                  withBytes:impl_->frame_converter_.data()
                bytesPerRow:impl_->frame_converter_.linesize()];
 
-    impl_->render(texture, false, frame.rotation);
+    impl_->render(texture, false, frame.rotation, isHDR);
     return true;
 }
 
@@ -471,6 +528,12 @@ bool MetalRenderer::is_ready() const { return impl_->ready; }
 
 void MetalRenderer::set_layer(void* metal_layer) {
     impl_->metalLayer = (__bridge CAMetalLayer*)metal_layer;
+    if (impl_->metalLayer) {
+        impl_->metalLayer.pixelFormat = MTLPixelFormatRGBA16Float;
+        if (@available(macOS 10.11, *)) {
+            impl_->metalLayer.wantsExtendedDynamicRangeContent = YES;
+        }
+    }
 }
 
 void* MetalRenderer::layer() const {

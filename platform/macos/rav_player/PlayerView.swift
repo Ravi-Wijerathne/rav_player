@@ -219,6 +219,15 @@ struct PlayerView: View {
                     .foregroundColor(viewModel.showPlaylist ? .green : .white)
             }
             .buttonStyle(.plain)
+
+            if viewModel.canStartPiP {
+                Button(action: { viewModel.togglePiP() }) {
+                    Image(systemName: viewModel.isPiPActive ? "pip.exit" : "pip.enter")
+                        .font(.title3)
+                        .foregroundColor(viewModel.isPiPActive ? .blue : .white)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .foregroundColor(.white)
     }

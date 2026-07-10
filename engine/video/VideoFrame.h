@@ -10,6 +10,7 @@ namespace rav {
 enum class VideoFrameFormat {
     Unknown,
     YUV420P,
+    YUV420P10,
     NV12,
     YUV422,
     RGB,
@@ -31,6 +32,8 @@ struct VideoFrame {
     static VideoFrameFormat from_av_pixel_format(AVPixelFormat fmt) {
         switch (fmt) {
             case AV_PIX_FMT_YUV420P: return VideoFrameFormat::YUV420P;
+            case AV_PIX_FMT_YUV420P10LE:
+            case AV_PIX_FMT_YUV420P10BE: return VideoFrameFormat::YUV420P10;
             case AV_PIX_FMT_NV12:    return VideoFrameFormat::NV12;
             case AV_PIX_FMT_YUV422P: return VideoFrameFormat::YUV422;
             case AV_PIX_FMT_RGB24:   return VideoFrameFormat::RGB;

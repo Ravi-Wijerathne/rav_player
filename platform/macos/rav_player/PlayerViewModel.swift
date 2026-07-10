@@ -1,5 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AVKit
+import Combine
 
 struct PlaylistItemModel: Identifiable {
     let id = UUID()
@@ -43,7 +45,7 @@ struct SubtitleItem: Identifiable {
     let height: Int
 }
 
-class PlayerViewModel: ObservableObject {
+class PlayerViewModel: NSObject, ObservableObject, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
     @Published var state: PlayerBridgeState = .idle
     @Published var duration: Double = 0.0
     @Published var currentTime: Double = 0.0
@@ -77,13 +79,22 @@ class PlayerViewModel: ObservableObject {
         return CGFloat(videoWidth) / CGFloat(videoHeight)
     }
 
+    private var pipController: AVPictureInPictureController?
+    @Published var isPiPActive: Bool = false
+    @Published var canStartPiP: Bool = false
+
     private let bridge = PlayerBridge()
     private var eventTimer: Timer?
     var isPlaying: Bool { state == .playing }
     var isPaused: Bool { state == .paused }
 
+    override init() {
+        super.init()
+    }
+
     func setup() {
         updateState()
+        setupPiP()
     }
 
     func openFile() {
@@ -352,6 +363,77 @@ class PlayerViewModel: ObservableObject {
 
     private func updateState() {
         state = bridge.state
+    }
+
+    // ── Picture in Picture ──
+
+    private func setupPiP() {
+        if AVPictureInPictureController.isPictureInPictureSupported() {
+            if let displayLayer = bridge.sampleBufferDisplayLayer {
+                let contentSource = AVPictureInPictureController.ContentSource(
+                    sampleBufferDisplayLayer: displayLayer,
+                    playbackDelegate: self)
+                pipController = AVPictureInPictureController(contentSource: contentSource)
+                pipController?.delegate = self
+                canStartPiP = true
+            }
+        }
+    }
+    
+    func togglePiP() {
+        guard let pipController = pipController else { return }
+        if pipController.isPictureInPictureActive {
+            pipController.stopPictureInPicture()
+        } else {
+            // Pre-start the bridge PiP logic to let frames flow into the sample buffer display layer.
+            // AVKit requires the layer to have a valid videoRect BEFORE it starts the enter animation.
+            bridge.startPiP()
+            isPiPActive = true
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                pipController.startPictureInPicture()
+            }
+        }
+    }
+
+    // AVPictureInPictureControllerDelegate
+    func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        bridge.startPiP()
+        isPiPActive = true
+    }
+    
+    func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        bridge.stopPiP()
+        isPiPActive = false
+    }
+
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        if let window = NSApp.windows.first(where: { $0.title == mediaTitle }) ?? NSApp.mainWindow {
+            window.makeKeyAndOrderFront(nil)
+        }
+        completionHandler(true)
+    }
+    
+    // AVPictureInPictureSampleBufferPlaybackDelegate
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, setPlaying playing: Bool) {
+        if playing { bridge.play() } else { bridge.pause() }
+    }
+    
+    func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
+        let currentDuration = bridge.duration > 0 ? bridge.duration : 0.01 // prevent NaN or 0
+        return CMTimeRange(start: .zero, duration: CMTimeMakeWithSeconds(currentDuration, preferredTimescale: 1000))
+    }
+    
+    func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool {
+        return bridge.state == .paused || bridge.state == .idle || bridge.state == .stopped
+    }
+    
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions) {
+    }
+    
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, skipByInterval skipInterval: CMTime, completion completionHandler: @escaping () -> Void) {
+        bridge.seek(to: bridge.currentTime + skipInterval.seconds)
+        completionHandler()
     }
 
     deinit {

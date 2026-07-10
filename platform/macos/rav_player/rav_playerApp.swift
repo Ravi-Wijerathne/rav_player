@@ -23,7 +23,7 @@ struct RavPlayerApp: App {
                 Button("Open URL...") {
                     viewModel.openURL()
                 }
-                .keyboardShortcut("O", modifiers: .command)
+                .keyboardShortcut("o", modifiers: [.command, .shift])
             }
 
             CommandMenu("Playback") {

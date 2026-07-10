@@ -2,6 +2,8 @@
 #import <CoreVideo/CoreVideo.h>
 #import <AppKit/AppKit.h>
 
+@class AVSampleBufferDisplayLayer;
+
 NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, PlayerBridgeState) {
@@ -94,6 +96,10 @@ typedef NS_ENUM(NSInteger, PlayerRepeatMode) {
 @property (readonly) BOOL hasSubtitles;
 - (NSArray<NSString*>*)currentSubtitleTexts; // Keep for backwards compatibility
 - (NSArray<PlayerBridgeSubtitle*>*)currentSubtitles;
+
+@property (readonly, nullable) AVSampleBufferDisplayLayer* sampleBufferDisplayLayer;
+- (void)startPiP;
+- (void)stopPiP;
 
 @end
 
