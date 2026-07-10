@@ -85,7 +85,13 @@ bool MacOSAudioOutput::pause() {
 }
 
 bool MacOSAudioOutput::resume() {
-    return play();
+    if (!initialized_ || playing_) return false;
+    OSStatus status = AudioQueueStart(queue_, nullptr);
+    if (status == noErr) {
+        playing_ = true;
+        return true;
+    }
+    return false;
 }
 
 bool MacOSAudioOutput::stop() {

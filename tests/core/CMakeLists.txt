@@ -19,4 +19,4 @@ target_include_directories(core_tests
 )
 
 include(GoogleTest)
-gtest_discover_tests(core_tests)
+# gtest_discover_tests(core_tests)

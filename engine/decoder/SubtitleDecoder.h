@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <mutex>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -23,11 +24,12 @@ public:
     SubtitleDecoder(const SubtitleDecoder&) = delete;
     SubtitleDecoder& operator=(const SubtitleDecoder&) = delete;
 
-    SubtitleDecoder(SubtitleDecoder&&) = default;
-    SubtitleDecoder& operator=(SubtitleDecoder&&) = default;
+    SubtitleDecoder(SubtitleDecoder&&) = delete;
+    SubtitleDecoder& operator=(SubtitleDecoder&&) = delete;
 
     bool open(AVCodecParameters* codecpar,
               const AVCodec* codec = nullptr) {
+        std::lock_guard<std::mutex> lock(codec_mutex_);
         if (!codecpar) return false;
         if (!codec) {
             codec = avcodec_find_decoder(codecpar->codec_id);
@@ -44,7 +46,15 @@ public:
         return ret >= 0;
     }
 
+    void flush() {
+        std::lock_guard<std::mutex> lock(codec_mutex_);
+        if (codec_ctx_) {
+            avcodec_flush_buffers(codec_ctx_.get());
+        }
+    }
+
     void close() {
+        std::lock_guard<std::mutex> lock(codec_mutex_);
         codec_ctx_.reset();
     }
 
@@ -60,6 +70,7 @@ public:
     // May produce zero, one, or multiple subtitle frames.
     std::vector<DecodedSubtitle> decode(AVPacket* pkt, double stream_time_base) {
         std::vector<DecodedSubtitle> result;
+        std::lock_guard<std::mutex> lock(codec_mutex_);
         if (!codec_ctx_) return result;
 
         AVSubtitle sub;
@@ -124,6 +135,7 @@ public:
 
 private:
     CodecContextPtr codec_ctx_;
+    std::mutex codec_mutex_;
 };
 
 } // namespace rav
