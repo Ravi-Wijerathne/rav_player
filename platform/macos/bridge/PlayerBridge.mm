@@ -60,6 +60,14 @@ using namespace rav;
 }
 @end
 
+struct CachedFrame {
+    rav::FramePtr frame;
+    double pts;
+    int width;
+    int height;
+    rav::VideoFrameFormat format;
+};
+
 @interface PlayerBridge () {
     std::unique_ptr<PlaybackEngine> _engine;
     std::unique_ptr<MetalRenderer> _renderer;
@@ -73,6 +81,8 @@ using namespace rav;
     BOOL _isPiPActive;
     AVSampleBufferDisplayLayer* _sampleBufferDisplayLayer;
     std::unique_ptr<rav::FrameConverter> _pipConverter;
+    CachedFrame _lastPoppedFrame;
+    BOOL _hasLastPoppedFrame;
 }
 
 - (void)syncPlaylistItems;
@@ -95,6 +105,7 @@ using namespace rav;
         _sampleBufferDisplayLayer.videoGravity = AVLayerVideoGravityResizeAspect;
         _sampleBufferDisplayLayer.frame = CGRectMake(0, 0, 1, 1);
         _pipConverter = std::make_unique<rav::FrameConverter>();
+        _hasLastPoppedFrame = NO;
 
         __weak PlayerBridge* weakSelf = self;
         _audioOutput->set_fill_callback([weakSelf](uint8_t* data, int frames) -> int {
@@ -430,6 +441,64 @@ using namespace rav;
     [self play];
 }
 
+- (CMSampleBufferRef)createSampleBufferFromVideoFrame:(const CachedFrame&)vf {
+    if (!vf.frame) return NULL;
+    
+    rav::FrameConverterSpec spec;
+    spec.src_width = vf.width;
+    spec.src_height = vf.height;
+    spec.src_format = (AVPixelFormat)vf.frame->format;
+    
+    int max_pip_w = 854;
+    int dst_w = vf.width;
+    int dst_h = vf.height;
+    if (dst_w > max_pip_w) {
+        dst_h = (int)((float)dst_h * ((float)max_pip_w / (float)dst_w));
+        dst_w = max_pip_w;
+    }
+    spec.dst_width = dst_w;
+    spec.dst_height = dst_h;
+    spec.dst_format = AV_PIX_FMT_BGRA;
+    
+    if (_pipConverter->init(spec)) {
+        if (_pipConverter->convert_to_buffer(vf.frame.get())) {
+            CVPixelBufferRef pixelBuffer = NULL;
+            NSDictionary *options = @{
+                (id)kCVPixelBufferCGImageCompatibilityKey: @YES,
+                (id)kCVPixelBufferCGBitmapContextCompatibilityKey: @YES
+            };
+            CVReturn err = CVPixelBufferCreate(kCFAllocatorDefault, dst_w, dst_h,
+                                               kCVPixelFormatType_32BGRA,
+                                               (__bridge CFDictionaryRef)options,
+                                               &pixelBuffer);
+            if (err == kCVReturnSuccess) {
+                CVPixelBufferLockBaseAddress(pixelBuffer, 0);
+                uint8_t* dst = (uint8_t*)CVPixelBufferGetBaseAddress(pixelBuffer);
+                size_t dstStride = CVPixelBufferGetBytesPerRow(pixelBuffer);
+                uint8_t* src = _pipConverter->data();
+                size_t srcStride = _pipConverter->linesize();
+                for (int y = 0; y < dst_h; ++y) {
+                    memcpy(dst + y * dstStride, src + y * srcStride, dst_w * 4);
+                }
+                CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
+                
+                CMVideoFormatDescriptionRef videoInfo = NULL;
+                CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, pixelBuffer, &videoInfo);
+                
+                CMSampleTimingInfo timing = { CMTimeMake(1, 60), CMTimeMake(vf.pts * 1000, 1000), kCMTimeInvalid };
+                
+                CMSampleBufferRef sampleBuffer = NULL;
+                CMSampleBufferCreateReadyWithImageBuffer(kCFAllocatorDefault, pixelBuffer, videoInfo, &timing, &sampleBuffer);
+                
+                if (videoInfo) CFRelease(videoInfo);
+                CVPixelBufferRelease(pixelBuffer);
+                return sampleBuffer;
+            }
+        }
+    }
+    return NULL;
+}
+
 - (void)renderFrame {
     if (!_engine || !_renderer || !_renderer->is_ready()) return;
     if (_engine->state() != PlayerState::Playing) return;
@@ -442,69 +511,33 @@ using namespace rav;
               _engine->video_height());
     }
 
-    VideoFrame vf;
+    rav::VideoFrame vf;
     if (_engine->sync_pop_video_frame(vf)) {
+        @synchronized(self) {
+            _hasLastPoppedFrame = YES;
+            _lastPoppedFrame.frame.reset(av_frame_clone(vf.frame.get()));
+            _lastPoppedFrame.pts = vf.pts;
+            _lastPoppedFrame.width = vf.width;
+            _lastPoppedFrame.height = vf.height;
+            _lastPoppedFrame.format = vf.format;
+        }
+
         _renderer->present_frame(vf);
         
         if (_isPiPActive && vf.frame) {
-            rav::FrameConverterSpec spec;
-            spec.src_width = vf.width;
-            spec.src_height = vf.height;
-            spec.src_format = vf.format == rav::VideoFrameFormat::YUV420P10 ? AV_PIX_FMT_YUV420P10LE : (vf.format == rav::VideoFrameFormat::NV12 ? AV_PIX_FMT_NV12 : AV_PIX_FMT_YUV420P);
-            // wait, we can just use vf.frame->format which is the raw AVPixelFormat!
-            spec.src_format = (AVPixelFormat)vf.frame->format;
+            CachedFrame tempFrame;
+            tempFrame.frame.reset(av_frame_clone(vf.frame.get()));
+            tempFrame.pts = vf.pts;
+            tempFrame.width = vf.width;
+            tempFrame.height = vf.height;
+            tempFrame.format = vf.format;
             
-            int max_pip_w = 854;
-            int dst_w = vf.width;
-            int dst_h = vf.height;
-            if (dst_w > max_pip_w) {
-                dst_h = (int)((float)dst_h * ((float)max_pip_w / (float)dst_w));
-                dst_w = max_pip_w;
-            }
-            spec.dst_width = dst_w;
-            spec.dst_height = dst_h;
-            spec.dst_format = AV_PIX_FMT_BGRA;
-            
-            if (_pipConverter->init(spec)) {
-                if (_pipConverter->convert_to_buffer(vf.frame.get())) {
-                    CVPixelBufferRef pixelBuffer = NULL;
-                    NSDictionary *options = @{
-                        (id)kCVPixelBufferCGImageCompatibilityKey: @YES,
-                        (id)kCVPixelBufferCGBitmapContextCompatibilityKey: @YES
-                    };
-                    CVReturn err = CVPixelBufferCreate(kCFAllocatorDefault, dst_w, dst_h,
-                                                       kCVPixelFormatType_32BGRA,
-                                                       (__bridge CFDictionaryRef)options,
-                                                       &pixelBuffer);
-                    if (err == kCVReturnSuccess) {
-                        CVPixelBufferLockBaseAddress(pixelBuffer, 0);
-                        uint8_t* dst = (uint8_t*)CVPixelBufferGetBaseAddress(pixelBuffer);
-                        size_t dstStride = CVPixelBufferGetBytesPerRow(pixelBuffer);
-                        uint8_t* src = _pipConverter->data();
-                        size_t srcStride = _pipConverter->linesize();
-                        for (int y = 0; y < dst_h; ++y) {
-                            memcpy(dst + y * dstStride, src + y * srcStride, dst_w * 4);
-                        }
-                        CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
-                        
-                        CMVideoFormatDescriptionRef videoInfo = NULL;
-                        CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, pixelBuffer, &videoInfo);
-                        
-                        CMSampleTimingInfo timing = { CMTimeMake(1, 60), CMTimeMake(vf.pts * 1000, 1000), kCMTimeInvalid };
-                        
-                        CMSampleBufferRef sampleBuffer = NULL;
-                        CMSampleBufferCreateReadyWithImageBuffer(kCFAllocatorDefault, pixelBuffer, videoInfo, &timing, &sampleBuffer);
-                        
-                        if (sampleBuffer) {
-                            if ([_sampleBufferDisplayLayer isReadyForMoreMediaData]) {
-                                [_sampleBufferDisplayLayer enqueueSampleBuffer:sampleBuffer];
-                            }
-                            CFRelease(sampleBuffer);
-                        }
-                        if (videoInfo) CFRelease(videoInfo);
-                        CVPixelBufferRelease(pixelBuffer);
-                    }
+            CMSampleBufferRef sampleBuffer = [self createSampleBufferFromVideoFrame:tempFrame];
+            if (sampleBuffer) {
+                if ([_sampleBufferDisplayLayer isReadyForMoreMediaData]) {
+                    [_sampleBufferDisplayLayer enqueueSampleBuffer:sampleBuffer];
                 }
+                CFRelease(sampleBuffer);
             }
         }
     } else if (frameCount % 30 == 1) {
@@ -515,6 +548,30 @@ using namespace rav;
 - (void)startPiP {
     _isPiPActive = YES;
     _sampleBufferDisplayLayer.hidden = NO;
+    
+    if (_engine->state() == PlayerState::Paused) {
+        CachedFrame vf;
+        BOOL hasFrame = NO;
+        @synchronized(self) {
+            hasFrame = _hasLastPoppedFrame;
+            if (hasFrame && _lastPoppedFrame.frame) {
+                vf.frame.reset(av_frame_clone(_lastPoppedFrame.frame.get()));
+                vf.pts = _lastPoppedFrame.pts;
+                vf.width = _lastPoppedFrame.width;
+                vf.height = _lastPoppedFrame.height;
+                vf.format = _lastPoppedFrame.format;
+            } else {
+                hasFrame = NO;
+            }
+        }
+        if (hasFrame) {
+            CMSampleBufferRef sampleBuffer = [self createSampleBufferFromVideoFrame:vf];
+            if (sampleBuffer) {
+                [_sampleBufferDisplayLayer enqueueSampleBuffer:sampleBuffer];
+                CFRelease(sampleBuffer);
+            }
+        }
+    }
 }
 
 - (void)stopPiP {
