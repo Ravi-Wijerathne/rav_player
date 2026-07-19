@@ -63,12 +63,10 @@ struct PlayerView: View {
     @ViewBuilder
     private var videoArea: some View {
         if viewModel.hasVideo {
-            ZStack {
-                MetalVideoView()
-                    .aspectRatio(viewModel.videoAspectRatio, contentMode: .fit)
-
-                subtitleOverlay
-            }
+            MetalVideoView()
+                .aspectRatio(viewModel.videoAspectRatio, contentMode: .fit)
+                .overlay(subtitleOverlay)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.hasAudio {
             audioPlaceholder
         } else {

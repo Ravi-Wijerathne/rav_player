@@ -66,6 +66,52 @@ public:
         double time_base{0.0};
     };
 
+    static std::string extract_ass_text(const char* ass_line) {
+        std::string line(ass_line);
+        
+        int commas = 0;
+        size_t pos = 0;
+        
+        if (line.find("Dialogue:") == 0) {
+            while (commas < 9 && pos < line.size()) {
+                if (line[pos] == ',') commas++;
+                pos++;
+            }
+        } else {
+            while (commas < 8 && pos < line.size()) {
+                if (line[pos] == ',') commas++;
+                pos++;
+            }
+        }
+        
+        if (pos < line.size()) {
+            line = line.substr(pos);
+        }
+        
+        std::string result;
+        result.reserve(line.size());
+        for (size_t i = 0; i < line.size(); ++i) {
+            if (line[i] == '{') {
+                while (i < line.size() && line[i] != '}') ++i;
+                continue;
+            }
+            if (line[i] == '\\' && i + 1 < line.size()) {
+                if (line[i + 1] == 'N' || line[i + 1] == 'n') {
+                    result += '\n';
+                    ++i;
+                    continue;
+                }
+                if (line[i + 1] == 'h') {
+                    result += ' ';
+                    ++i;
+                    continue;
+                }
+            }
+            result += line[i];
+        }
+        return result;
+    }
+
     // Decode a single subtitle packet.
     // May produce zero, one, or multiple subtitle frames.
     std::vector<DecodedSubtitle> decode(AVPacket* pkt, double stream_time_base) {
@@ -84,12 +130,24 @@ public:
         }
 
         DecodedSubtitle ds;
+        
+        double packet_pts_sec = (pkt->pts == AV_NOPTS_VALUE) ? 0.0 : pkt->pts * stream_time_base;
+        double packet_duration_sec = pkt->duration * stream_time_base;
+        
+        double base_time = packet_pts_sec;
+        if (sub.pts != AV_NOPTS_VALUE) {
+            base_time = sub.pts / (double)AV_TIME_BASE;
+        }
+        
         ds.pts = sub.pts;
         ds.time_base = stream_time_base;
-        ds.frame.start_time = sub.pts * stream_time_base
-                            + sub.start_display_time / 1000.0;
-        ds.frame.end_time = sub.pts * stream_time_base
-                          + sub.end_display_time / 1000.0;
+        ds.frame.start_time = base_time + sub.start_display_time / 1000.0;
+        
+        double duration = (sub.end_display_time - sub.start_display_time) / 1000.0;
+        if (duration <= 0.0) {
+            duration = packet_duration_sec;
+        }
+        ds.frame.end_time = ds.frame.start_time + duration;
 
         for (unsigned i = 0; i < sub.num_rects; ++i) {
             auto* rect = sub.rects[i];
@@ -105,7 +163,7 @@ public:
                 case SUBTITLE_ASS:
                     if (rect->ass) {
                         if (!ds.frame.text.empty()) ds.frame.text += '\n';
-                        ds.frame.text += rect->ass;
+                        ds.frame.text += extract_ass_text(rect->ass);
                     }
                     break;
                 case SUBTITLE_BITMAP:
