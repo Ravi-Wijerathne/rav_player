@@ -2,6 +2,8 @@
 
 #include "rendering/MetalRenderer.h"
 
+#import <QuartzCore/CAMetalLayer.h>
+
 using namespace rav;
 
 TEST(MetalRendererTest, CreateAndDestroy) {
@@ -65,9 +67,13 @@ TEST(MetalRendererTest, SetLayer) {
     MetalRenderer renderer;
     ASSERT_TRUE(renderer.init());
     void* original = renderer.layer();
-    void* fake_layer = (void*)(intptr_t)0xDEAD;
-    renderer.set_layer(fake_layer);
-    EXPECT_EQ(renderer.layer(), fake_layer);
+    
+    // Create a real CAMetalLayer to avoid segfaulting when MetalRenderer sets its properties
+    CAMetalLayer* fake_layer = [CAMetalLayer layer];
+    void* fake_layer_ptr = (__bridge void*)fake_layer;
+    
+    renderer.set_layer(fake_layer_ptr);
+    EXPECT_EQ(renderer.layer(), fake_layer_ptr);
     renderer.set_layer(original);
     EXPECT_EQ(renderer.layer(), original);
 }

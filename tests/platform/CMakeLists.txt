@@ -15,6 +15,9 @@ target_link_libraries(platform_tests
         "-framework AudioToolbox"
         "-framework Metal"
         "-framework VideoToolbox"
+        "-framework CoreGraphics"
+        "-framework CoreMedia"
+        "-framework CoreVideo"
 )
 
 target_include_directories(platform_tests
