@@ -35,6 +35,12 @@ mkdir -p "$APP_DIR/Contents/Resources"
 MACOS_DIR="$ROOT_DIR/platform/macos"
 
 cp "$MACOS_DIR/rav_player/Info.plist" "$APP_DIR/Contents/"
+if [ -f "$MACOS_DIR/AppIcon.icns" ]; then
+    cp "$MACOS_DIR/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+fi
+if [ -f "$ROOT_DIR/logo/logo.png" ]; then
+    cp "$ROOT_DIR/logo/logo.png" "$APP_DIR/Contents/Resources/logo.png"
+fi
 
 # Compile Metal shaders
 echo "  Compiling Metal shaders..."
