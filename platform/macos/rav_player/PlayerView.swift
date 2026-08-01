@@ -12,9 +12,8 @@ struct PlayerView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                videoArea
-
                 if viewModel.isPlayable {
+                    videoArea
                     controlsArea
                 } else {
                     dropArea
@@ -60,12 +59,21 @@ struct PlayerView: View {
         }
     }
 
+    private var logoImage: Image? {
+        if let url = Bundle.main.url(forResource: "logo", withExtension: "png"),
+           let nsImg = NSImage(contentsOf: url) {
+            return Image(nsImage: nsImg)
+        }
+        return nil
+    }
+
     @ViewBuilder
     private var videoArea: some View {
         if viewModel.hasVideo {
             MetalVideoView()
                 .aspectRatio(viewModel.videoAspectRatio, contentMode: .fit)
                 .overlay(subtitleOverlay)
+                .overlay(headerBrandingOverlay, alignment: .topLeading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.hasAudio {
             audioPlaceholder
@@ -74,24 +82,96 @@ struct PlayerView: View {
         }
     }
 
+    private var headerBrandingOverlay: some View {
+        HStack(spacing: 8) {
+            if let logo = logoImage {
+                logo
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 24)
+            }
+            if !viewModel.mediaTitle.isEmpty {
+                Text(viewModel.mediaTitle)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.55))
+        .cornerRadius(8)
+        .padding(12)
+        .allowsHitTesting(false)
+    }
+
     private var audioPlaceholder: some View {
         ZStack {
-            Color.black
-            Image(systemName: "music.note")
-                .font(.system(size: 64))
-                .foregroundColor(.gray)
+            LinearGradient(
+                colors: [Color(red: 0.05, green: 0.07, blue: 0.15), Color.black],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            VStack(spacing: 16) {
+                if let logo = logoImage {
+                    logo
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 280, maxHeight: 180)
+                        .shadow(color: Color.blue.opacity(0.4), radius: 20, x: 0, y: 10)
+                } else {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 64))
+                        .foregroundColor(.cyan)
+                }
+                
+                if !viewModel.mediaTitle.isEmpty {
+                    Text(viewModel.mediaTitle)
+                        .font(.title2.bold())
+                        .foregroundColor(.white)
+                }
+                if !viewModel.mediaArtist.isEmpty {
+                    Text(viewModel.mediaArtist)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding()
         }
-        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyArea: some View {
         ZStack {
-            Color.black
-            Text("Drop media file here")
-                .foregroundColor(.gray)
-                .font(.title2)
+            Color(white: 0.05)
+            
+            VStack(spacing: 24) {
+                if let logo = logoImage {
+                    logo
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 340, maxHeight: 200)
+                        .shadow(color: Color(red: 0.2, green: 0.4, blue: 0.9).opacity(0.35), radius: 25, x: 0, y: 12)
+                } else {
+                    Image(systemName: "film")
+                        .font(.system(size: 64))
+                        .foregroundColor(.gray)
+                }
+
+                VStack(spacing: 8) {
+                    Text("Drop media file here")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.9))
+
+                    Text("or use File > Open (⌘O)")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.gray)
+                }
+            }
+            .padding(40)
         }
-        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers)
             return true
@@ -99,22 +179,7 @@ struct PlayerView: View {
     }
 
     private var dropArea: some View {
-        ZStack {
-            Color.black
-            VStack(spacing: 16) {
-                Image(systemName: "film")
-                    .font(.system(size: 48))
-                    .foregroundColor(.gray)
-                Text("Drop media file or use File > Open")
-                    .foregroundColor(.gray)
-                    .font(.title3)
-            }
-        }
-        .aspectRatio(16.0 / 9.0, contentMode: .fit)
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            handleDrop(providers)
-            return true
-        }
+        emptyArea
     }
 
     private var controlsArea: some View {
