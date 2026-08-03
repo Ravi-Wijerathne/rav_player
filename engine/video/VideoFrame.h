@@ -28,6 +28,9 @@ struct VideoFrame {
     VideoFrameFormat format{VideoFrameFormat::Unknown};
     AVPixelFormat pix_fmt{AV_PIX_FMT_NONE};
     bool is_hardware{false};
+    bool is_hdr{false};
+    bool is_10bit{false};
+    bool is_bt2020{false};
 
     static VideoFrameFormat from_av_pixel_format(AVPixelFormat fmt) {
         switch (fmt) {

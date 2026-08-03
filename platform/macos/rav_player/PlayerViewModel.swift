@@ -368,6 +368,8 @@ class PlayerViewModel: NSObject, ObservableObject, AVPictureInPictureControllerD
     // ── Picture in Picture ──
 
     private func setupPiP() {
+        guard pipController == nil else { return }
+        
         if AVPictureInPictureController.isPictureInPictureSupported() {
             if let displayLayer = bridge.sampleBufferDisplayLayer {
                 let contentSource = AVPictureInPictureController.ContentSource(

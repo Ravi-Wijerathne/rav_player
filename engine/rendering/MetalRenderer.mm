@@ -199,7 +199,7 @@ public:
                                             options:MTLResourceStorageModeShared];
     }
 
-    void renderYUV(id<MTLTexture> yTexture, id<MTLTexture> uvTexture, int rotation, bool isHDR) {
+    void renderYUV(id<MTLTexture> yTexture, id<MTLTexture> uvTexture, int rotation, bool isHDR, bool is10Bit, bool isBT2020) {
         if (!ready || !metalLayer || !yTexture || !uvTexture) {
             static int once = 0; if (++once == 1) NSLog(@"renderYUV: early return ready=%d layer=%p y=%p uv=%p", ready, metalLayer, yTexture, uvTexture);
             return;
@@ -267,6 +267,8 @@ public:
 
             Uniforms uniforms;
             uniforms.is_hdr = isHDR ? 1 : 0;
+            uniforms.is_10bit = is10Bit ? 1 : 0;
+            uniforms.is_bt2020 = isBT2020 ? 1 : 0;
             [encoder setFragmentBytes:&uniforms length:sizeof(uniforms)
                               atIndex:FragmentInputIndexUniforms];
             [encoder setFragmentTexture:yTexture atIndex:0];
@@ -281,7 +283,7 @@ public:
         }
     }
 
-    void render(id<MTLTexture> texture, bool isYUV, int rotation, bool isHDR) {
+    void render(id<MTLTexture> texture, bool isYUV, int rotation, bool isHDR, bool is10Bit, bool isBT2020) {
         if (!ready) {
             static int once = 0; if (++once == 1) NSLog(@"MetalRenderer: render called but not ready");
             return;
@@ -361,6 +363,8 @@ public:
 
             Uniforms uniforms;
             uniforms.is_hdr = isHDR ? 1 : 0;
+            uniforms.is_10bit = is10Bit ? 1 : 0;
+            uniforms.is_bt2020 = isBT2020 ? 1 : 0;
             [encoder setFragmentBytes:&uniforms length:sizeof(uniforms)
                               atIndex:FragmentInputIndexUniforms];
             [encoder setFragmentTexture:texture atIndex:0];
@@ -406,7 +410,6 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
     bool isYUV = (frame.format == VideoFrameFormat::YUV420P ||
                   frame.format == VideoFrameFormat::NV12 ||
                   frame.format == VideoFrameFormat::YUV420P10);
-    bool isHDR = (frame.format == VideoFrameFormat::YUV420P10);
 
     static int diag = 0; if (++diag % 30 == 1)
         NSLog(@"present_frame: w=%d h=%d fmt=%d isYUV=%d",
@@ -443,7 +446,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                      mipmapLevel:0
                        withBytes:uvInterleaved.data()
                      bytesPerRow:uv_w * 4];
-            impl_->renderYUV(yTex, uvTex, frame.rotation, isHDR);
+            impl_->renderYUV(yTex, uvTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
             return true;
         }
 
@@ -480,7 +483,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                      bytesPerRow:uv_w * 2];
         }
 
-        impl_->renderYUV(yTex, uvTex, frame.rotation, isHDR);
+        impl_->renderYUV(yTex, uvTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
         return true;
     }
 
@@ -513,7 +516,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                  withBytes:impl_->frame_converter_.data()
                bytesPerRow:impl_->frame_converter_.linesize()];
 
-    impl_->render(texture, false, frame.rotation, isHDR);
+    impl_->render(texture, false, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
     return true;
 }
 

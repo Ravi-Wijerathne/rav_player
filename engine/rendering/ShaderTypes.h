@@ -21,6 +21,8 @@ struct Uniforms {
     float contrast{1.0f};
     float saturation{0.0f};
     int is_hdr{0};
+    int is_10bit{0};
+    int is_bt2020{0};
 };
 
 } // namespace rav

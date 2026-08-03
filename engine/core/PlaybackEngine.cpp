@@ -544,6 +544,9 @@ void PlaybackEngine::video_decode_thread_fn() {
             vf.rotation = video_rotation_;
             vf.pix_fmt = video_decoder_.pixel_format();
             vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
+            vf.is_10bit = (vf.format == VideoFrameFormat::YUV420P10);
+            vf.is_hdr = (vf.frame->color_trc == AVCOL_TRC_SMPTE2084 || vf.frame->color_trc == AVCOL_TRC_ARIB_STD_B67);
+            vf.is_bt2020 = (vf.frame->colorspace == AVCOL_SPC_BT2020_NCL || vf.frame->colorspace == AVCOL_SPC_BT2020_CL);
             vf.duration = 1.0 / 30.0;
             if (video_width_ == 0) {
                 video_width_ = vf.width;
@@ -578,6 +581,9 @@ void PlaybackEngine::video_decode_thread_fn() {
         vf.rotation = video_rotation_;
         vf.pix_fmt = video_decoder_.pixel_format();
         vf.format = VideoFrame::from_av_pixel_format(vf.pix_fmt);
+        vf.is_10bit = (vf.format == VideoFrameFormat::YUV420P10);
+        vf.is_hdr = (vf.frame->color_trc == AVCOL_TRC_SMPTE2084 || vf.frame->color_trc == AVCOL_TRC_ARIB_STD_B67);
+        vf.is_bt2020 = (vf.frame->colorspace == AVCOL_SPC_BT2020_NCL || vf.frame->colorspace == AVCOL_SPC_BT2020_CL);
         vf.duration = 1.0 / 30.0;
         
         while (video_queue_.size() >= 30 && running_ && !seek_requested_) {
