@@ -7,6 +7,9 @@ struct PlayerView: View {
     @State private var dragTime: Double = 0
     @State private var osdText: String?
     @State private var osdTimer: Timer?
+    @State private var isFullScreen: Bool = false
+    @State private var showControls: Bool = true
+    @State private var mouseTimer: Timer?
     @State private var showInfo: Bool = false
 
     var body: some View {
@@ -14,12 +17,24 @@ struct PlayerView: View {
             VStack(spacing: 0) {
                 if viewModel.isPlayable {
                     videoArea
-                    controlsArea
+                    if !isFullScreen {
+                        controlsArea
+                    }
                 } else {
                     dropArea
                 }
             }
             .background(Color.black)
+
+            if viewModel.isPlayable && isFullScreen {
+                VStack {
+                    Spacer()
+                    if showControls {
+                        controlsArea
+                            .transition(.opacity)
+                    }
+                }
+            }
 
             if let osdText = osdText {
                 Text(osdText)
@@ -50,6 +65,25 @@ struct PlayerView: View {
             if showInfo {
                 infoOverlay
             }
+        }
+        .onContinuousHover { phase in
+            if isFullScreen {
+                switch phase {
+                case .active:
+                    resetMouseTimer()
+                case .ended:
+                    break
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
+            isFullScreen = true
+            resetMouseTimer()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
+            isFullScreen = false
+            showControls = true
+            mouseTimer?.invalidate()
         }
         .onAppear {
             setupKeyboardShortcuts()
@@ -456,6 +490,29 @@ struct PlayerView: View {
             viewModel.togglePlaylist()
         }
         KeyboardShortcutManager.shared.startMonitoring()
+    }
+
+    private func resetMouseTimer() {
+        if !showControls {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showControls = true
+            }
+            NSCursor.unhide()
+        }
+        mouseTimer?.invalidate()
+        
+        if isFullScreen {
+            mouseTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: false) { _ in
+                guard !isDragging else {
+                    resetMouseTimer()
+                    return
+                }
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    showControls = false
+                }
+                NSCursor.setHiddenUntilMouseMoves(true)
+            }
+        }
     }
 
     private func showOSD(text: String) {
