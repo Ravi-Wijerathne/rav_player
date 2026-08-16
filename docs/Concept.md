@@ -509,18 +509,9 @@ Benefits:
 
 Platforms
 
-Windows:
-
-* DXVA2
-* D3D11VA
-
 macOS:
 
 * VideoToolbox
-
-Linux:
-
-* VAAPI
 
 ---
 

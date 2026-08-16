@@ -1,14 +1,11 @@
 # RavPlayer
 
-RavPlayer is a professional-grade, cross-platform media player designed with a **"Shared Media Engine + Native UI"** architecture. It is built to play virtually any media format while delivering a fully native user experience across multiple systems.
+RavPlayer is a professional-grade, native media player designed exclusively for macOS. It is built to play virtually any media format while delivering a fully native user experience, taking full advantage of macOS-specific frameworks and hardware acceleration.
 
 ### Project Goals & Architecture
-- **Shared Playback Engine:** Core playback logic, demuxing, decoding, synchronization, and streaming capabilities are written in C++20 for high performance and portability.
-- **Native Platform Integration:** Each platform uses native user interface libraries, window management, and native graphics APIs (e.g., Metal, Direct3D, OpenGL/Vulkan) for optimal integration.
-- **Target Platforms:** Designed to support macOS, Windows, Linux, Android, and iOS.
-
-> [!IMPORTANT]
-> **Current Status:** Although the architecture is cross-platform, **only macOS is currently developed and supported**. Other platforms are planned for future iterations.
+- **Dedicated Playback Engine:** Core playback logic, demuxing, decoding, synchronization, and streaming capabilities are written in C++20 for high performance.
+- **Native Platform Integration:** Deeply integrated with macOS using native user interface libraries, window management, and native graphics APIs (Metal) for optimal performance.
+- **Target Platform:** Designed specifically and exclusively for macOS.
 
 ---
 
