@@ -34,7 +34,7 @@ extern "C" {
 #include "../audio/AudioQueue.h"
 #include "../audio/AudioClock.h"
 #include "../audio/AudioOutput.h"
-#include "../video/VideoRenderer.h"
+#include "../rendering/MetalRenderer.h"
 #include "../decoder/SubtitleDecoder.h"
 #include "../subtitles/SubtitleQueue.h"
 
@@ -71,13 +71,15 @@ public:
         return subtitle_queue_.subtitles_at_time(current_time());
     }
 
-    void set_video_renderer(VideoRenderer* renderer) { video_renderer_ = renderer; }
-    void set_audio_output(AudioOutput* output) { audio_output_ = output; }
+    void set_video_renderer(MetalRenderer* renderer) { video_renderer_ = renderer; }
 
     EventBus<PlayerCommand>& command_bus() { return command_bus_; }
     EventBus<PlayerEvent>& event_bus() { return event_bus_; }
 
-    void set_volume(float vol) { volume_ = vol; }
+    void set_volume(float vol) { 
+        volume_ = vol;
+        if (audio_output_) audio_output_->set_volume(vol);
+    }
     float volume() const { return volume_; }
 
     int fill_audio_buffer(uint8_t* data, int frames_requested);
@@ -134,8 +136,8 @@ private:
     VideoClock video_clock_;
     AudioClock audio_clock_;
 
-    VideoRenderer* video_renderer_{nullptr};
-    AudioOutput* audio_output_{nullptr};
+    MetalRenderer* video_renderer_{nullptr};
+    std::unique_ptr<AudioOutput> audio_output_;
 
     int video_stream_{-1};
     int audio_stream_{-1};

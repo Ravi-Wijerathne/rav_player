@@ -85,6 +85,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVPictureInPictureControllerD
 
     private let bridge = PlayerBridge()
     private var eventTimer: Timer?
+    private var sleepActivity: NSObjectProtocol?
     var isPlaying: Bool { state == .playing }
     var isPaused: Bool { state == .paused }
 
@@ -363,6 +364,23 @@ class PlayerViewModel: NSObject, ObservableObject, AVPictureInPictureControllerD
 
     private func updateState() {
         state = bridge.state
+        updateSleepAssertion()
+    }
+
+    private func updateSleepAssertion() {
+        if isPlaying {
+            if sleepActivity == nil {
+                sleepActivity = ProcessInfo.processInfo.beginActivity(
+                    options: [.userInitiated, .idleDisplaySleepDisabled, .idleSystemSleepDisabled],
+                    reason: "Playing Media"
+                )
+            }
+        } else {
+            if let activity = sleepActivity {
+                ProcessInfo.processInfo.endActivity(activity)
+                sleepActivity = nil
+            }
+        }
     }
 
     // ── Picture in Picture ──
@@ -388,10 +406,10 @@ class PlayerViewModel: NSObject, ObservableObject, AVPictureInPictureControllerD
             pipController.stopPictureInPicture()
         } else {
             // Pre-start the bridge PiP logic to let frames flow into the sample buffer display layer.
-            // AVKit requires the layer to have a valid videoRect BEFORE it starts the enter animation.
             bridge.startPiP()
             isPiPActive = true
             
+            // Give the layer a moment to process the newly enqueued frame before animating PiP
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 pipController.startPictureInPicture()
             }
@@ -440,6 +458,9 @@ class PlayerViewModel: NSObject, ObservableObject, AVPictureInPictureControllerD
 
     deinit {
         eventTimer?.invalidate()
+        if let activity = sleepActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
         bridge.close()
     }
 }

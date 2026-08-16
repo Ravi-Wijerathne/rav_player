@@ -58,6 +58,25 @@ Alternatively, double-click the `rav_player.app` file in Finder.
 
 ---
 
+## Debugging & Logs
+
+To inspect runtime logs, diagnose issues, or view crash reports:
+
+1. **Run directly from terminal (Live `NSLog` & console output):**
+   ```bash
+   ./platform/macos/rav_player.app/Contents/MacOS/rav_player
+   ```
+2. **Stream macOS system logs in real time:**
+   ```bash
+   log stream --predicate 'process == "rav_player"' --info --debug
+   ```
+3. **View recent crash reports:**
+   ```bash
+   ls -lt ~/Library/Logs/DiagnosticReports/rav_player*
+   ```
+
+---
+
 ## Running Tests
 
 RavPlayer uses **Google Test** for unit and integration testing. To build and execute the tests, follow these steps:

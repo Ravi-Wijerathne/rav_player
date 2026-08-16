@@ -19,8 +19,14 @@ bool VideoDecoder::open(AVCodecParameters* codecpar, const AVCodec* codec) {
     codec_ctx_->thread_count = 0;
     codec_ctx_->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
 
-    if (hw_decoder_) {
-        hw_decoder_->init(codec_ctx_.get());
+    AVBufferRef* hw_device_ctx = nullptr;
+    int hw_ret = av_hwdevice_ctx_create(
+        &hw_device_ctx, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, nullptr, nullptr, 0);
+    if (hw_ret >= 0) {
+        codec_ctx_->hw_device_ctx = hw_device_ctx;
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(60, 0, 0)
+        codec_ctx_->hw_pix_fmt = AV_PIX_FMT_VIDEOTOOLBOX;
+#endif
     }
 
     ret = avcodec_open2(codec_ctx_.get(), codec, nullptr);
@@ -37,7 +43,6 @@ void VideoDecoder::flush() {
 void VideoDecoder::close() {
     std::lock_guard<std::mutex> lock(codec_mutex_);
     codec_ctx_.reset();
-    hw_decoder_.reset();
 }
 
 bool VideoDecoder::is_open() const { 
@@ -61,10 +66,6 @@ FramePtr VideoDecoder::receive_frame() {
     if (ret < 0) return nullptr;
 
     return frame;
-}
-
-void VideoDecoder::set_hardware_decoder(std::unique_ptr<HardwareDecoder> hw) {
-    hw_decoder_ = std::move(hw);
 }
 
 AVCodecContext* VideoDecoder::context() { 

@@ -1,18 +1,15 @@
 #pragma once
 
-#if defined(__APPLE__)
-
 #include <memory>
 
 #include "../video/VideoFrame.h"
-#include "../video/VideoRenderer.h"
 
 namespace rav {
 
-class MetalRenderer : public VideoRenderer {
+class MetalRenderer {
 public:
     MetalRenderer();
-    ~MetalRenderer() override;
+    ~MetalRenderer();
 
     MetalRenderer(const MetalRenderer&) = delete;
     MetalRenderer& operator=(const MetalRenderer&) = delete;
@@ -20,15 +17,15 @@ public:
     MetalRenderer(MetalRenderer&&) noexcept;
     MetalRenderer& operator=(MetalRenderer&&) noexcept;
 
-    bool init() override;
-    void shutdown() override;
+    bool init();
+    void shutdown();
 
-    bool present_frame(const VideoFrame& frame) override;
-    void resize(int width, int height) override;
+    bool present_frame(const VideoFrame& frame);
+    void resize(int width, int height);
 
-    int width() const override;
-    int height() const override;
-    bool is_ready() const override;
+    int width() const;
+    int height() const;
+    bool is_ready() const;
 
     void set_layer(void* metal_layer);
     void* layer() const;
@@ -39,5 +36,3 @@ private:
 };
 
 } // namespace rav
-
-#endif // __APPLE__

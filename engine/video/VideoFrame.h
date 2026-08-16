@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "../ffmpeg/FFmpegContext.h"
-#include "../decoder/HardwareDecoder.h"
+#include "../ffmpeg/FFmpegContext.h"
 
 namespace rav {
 
@@ -42,7 +42,7 @@ struct VideoFrame {
             case AV_PIX_FMT_RGB24:   return VideoFrameFormat::RGB;
             case AV_PIX_FMT_RGBA:    return VideoFrameFormat::RGBA;
             default:
-                if (HardwareDecoder::is_hw_pixel_format(fmt))
+                if (fmt == AV_PIX_FMT_VIDEOTOOLBOX)
                     return VideoFrameFormat::Hardware;
                 return VideoFrameFormat::Unknown;
         }

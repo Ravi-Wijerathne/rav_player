@@ -23,7 +23,12 @@ extern "C" {
 
 namespace rav {
 
-PlaybackEngine::PlaybackEngine() = default;
+PlaybackEngine::PlaybackEngine() {
+    audio_output_ = std::make_unique<AudioOutput>();
+    audio_output_->set_fill_callback([this](uint8_t* data, int frames) {
+        return fill_audio_buffer(data, frames);
+    });
+}
 
 PlaybackEngine::~PlaybackEngine() { close(); }
 
@@ -167,9 +172,6 @@ void PlaybackEngine::play() {
         bool ok = audio_output_->init(spec);
         fprintf(stderr, "play: audio_init(sr=%d ch=%d) -> %d\n",
                 spec.sample_rate, spec.channels, ok);
-        audio_output_->set_fill_callback([this](uint8_t* data, int frames) {
-            return fill_audio_buffer(data, frames);
-        });
 
         int bytes_per_sample = av_get_bytes_per_sample(AV_SAMPLE_FMT_FLT);
         if (bytes_per_sample <= 0) bytes_per_sample = 4;
