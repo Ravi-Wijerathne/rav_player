@@ -4,27 +4,23 @@ Project Name: rav_player
 
 Mission:
 
-Build a professional-grade, cross-platform media player capable of playing virtually any media format while providing fully native user experiences on:
+Build a professional-grade media player capable of playing virtually any media format while providing a fully native user experience exclusively on:
 
 * macOS
-* Windows
-* Linux
-* Android
-* iOS
 
 The architecture prioritizes:
 
 * Maximum codec compatibility
-* Native platform integration
-* Hardware acceleration
+* Native macOS integration
+* Metal hardware acceleration
 * Long-term maintainability
 * Extensibility
 * Performance
-* Shared playback engine
+* Dedicated C++ playback engine
 
 The project follows a:
 
-"Shared Media Engine + Native UI"
+"C++ Media Engine + SwiftUI Native UI"
 
 architecture.
 
@@ -68,38 +64,6 @@ All media functionality remains centralized.
 │ FFmpeg                      │
 └─────────────────────────────┘
 
-┌─────────────────────────────┐
-│ Windows App (WinUI)         │
-└──────────────┬──────────────┘
-│
-┌──────────────▼──────────────┐
-│ Shared Media Engine (C++)   │
-└─────────────────────────────┘
-
-┌─────────────────────────────┐
-│ Linux App (Qt)              │
-└──────────────┬──────────────┘
-│
-┌──────────────▼──────────────┐
-│ Shared Media Engine (C++)   │
-└─────────────────────────────┘
-
-┌─────────────────────────────┐
-│ Android App (Compose)       │
-└──────────────┬──────────────┘
-│
-┌──────────────▼──────────────┐
-│ Shared Media Engine (C++)   │
-└─────────────────────────────┘
-
-┌─────────────────────────────┐
-│ iOS App (SwiftUI)           │
-└──────────────┬──────────────┘
-│
-┌──────────────▼──────────────┐
-│ Shared Media Engine (C++)   │
-└─────────────────────────────┘
-
 ---
 
 # Technology Stack
@@ -115,7 +79,6 @@ Reason:
 * Mature multimedia ecosystem
 * Excellent FFmpeg integration
 * Native interoperability
-* Cross-platform
 * Predictable performance
 
 ---
@@ -154,82 +117,6 @@ Objective-C++
 
 ---
 
-## iOS
-
-UI:
-
-SwiftUI
-
-Hardware Decoder:
-
-VideoToolbox
-
-Graphics:
-
-Metal
-
-Bridge:
-
-Objective-C++
-
----
-
-## Windows
-
-UI:
-
-WinUI
-
-Hardware Decoder:
-
-D3D11VA
-
-Graphics:
-
-Direct3D 11/12
-
-Bridge:
-
-C++/WinRT
-
----
-
-## Linux
-
-UI:
-
-Qt
-
-Hardware Decoder:
-
-VAAPI
-
-Graphics:
-
-OpenGL / Vulkan
-
----
-
-## Android
-
-UI:
-
-Jetpack Compose
-
-Hardware Decoder:
-
-MediaCodec
-
-Graphics:
-
-OpenGL ES / Vulkan
-
-Bridge:
-
-JNI
-
----
-
 # Repository Structure
 
 root/
@@ -237,11 +124,7 @@ root/
 ├── engine/
 │
 ├── platform/
-│   ├── macos/
-│   ├── ios/
-│   ├── windows/
-│   ├── linux/
-│   └── android/
+│   └── macos/
 │
 ├── docs/
 │
@@ -531,12 +414,6 @@ Platform implementations:
 
 VideoToolboxDecoder
 
-D3D11Decoder
-
-VAAPIDecoder
-
-MediaCodecDecoder
-
 ---
 
 # Rendering Backend Abstraction
@@ -546,12 +423,6 @@ class Renderer
 Implementations:
 
 MetalRenderer
-
-Direct3DRenderer
-
-OpenGLRenderer
-
-VulkanRenderer
 
 The engine communicates only with Renderer.
 
