@@ -11,7 +11,7 @@ extern "C" {
 }
 
 #include "../ffmpeg/FFmpegContext.h"
-#include "HardwareDecoder.h"
+#include <libavutil/hwcontext.h>
 
 namespace rav {
 
@@ -32,7 +32,6 @@ public:
     bool is_open() const;
     bool send_packet(AVPacket* pkt);
     FramePtr receive_frame();
-    void set_hardware_decoder(std::unique_ptr<HardwareDecoder> hw);
     
     AVCodecContext* context();
     int width() const;
@@ -40,7 +39,6 @@ public:
     AVPixelFormat pixel_format() const;
 
     CodecContextPtr codec_ctx_;
-    std::unique_ptr<HardwareDecoder> hw_decoder_;
     std::mutex codec_mutex_;
 };
 

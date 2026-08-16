@@ -1,8 +1,9 @@
-#include "MacOSAudioOutput.h"
+#include "AudioOutput.h"
+#include <cstring>
 
 namespace rav {
 
-bool MacOSAudioOutput::init(const AudioOutputSpec& spec) {
+bool AudioOutput::init(const AudioOutputSpec& spec) {
     if (initialized_) shutdown();
 
     spec_ = spec;
@@ -33,12 +34,12 @@ bool MacOSAudioOutput::init(const AudioOutputSpec& spec) {
         buffers_[i]->mAudioDataByteSize = buffers_[i]->mAudioDataBytesCapacity;
     }
 
-    AudioQueueSetParameter(queue_, kAudioQueueParam_Volume, 1.0);
+    AudioQueueSetParameter(queue_, kAudioQueueParam_Volume, volume_);
     initialized_ = true;
     return true;
 }
 
-void MacOSAudioOutput::shutdown() {
+void AudioOutput::shutdown() {
     if (queue_) {
         AudioQueueStop(queue_, true);
         for (int i = 0; i < 3; ++i) {
@@ -54,7 +55,7 @@ void MacOSAudioOutput::shutdown() {
     initialized_ = false;
 }
 
-bool MacOSAudioOutput::play() {
+bool AudioOutput::play() {
     if (!initialized_ || playing_) return false;
 
     for (int i = 0; i < 3; ++i) {
@@ -74,7 +75,7 @@ bool MacOSAudioOutput::play() {
     return false;
 }
 
-bool MacOSAudioOutput::pause() {
+bool AudioOutput::pause() {
     if (!playing_) return false;
     OSStatus status = AudioQueuePause(queue_);
     if (status == noErr) {
@@ -84,7 +85,7 @@ bool MacOSAudioOutput::pause() {
     return false;
 }
 
-bool MacOSAudioOutput::resume() {
+bool AudioOutput::resume() {
     if (!initialized_ || playing_) return false;
     OSStatus status = AudioQueueStart(queue_, nullptr);
     if (status == noErr) {
@@ -94,16 +95,16 @@ bool MacOSAudioOutput::resume() {
     return false;
 }
 
-bool MacOSAudioOutput::stop() {
+bool AudioOutput::stop() {
     if (!initialized_) return false;
     AudioQueueStop(queue_, true);
     playing_ = false;
     return true;
 }
 
-void MacOSAudioOutput::audio_queue_callback(void* user_data, AudioQueueRef queue,
+void AudioOutput::audio_queue_callback(void* user_data, AudioQueueRef queue,
                                              AudioQueueBufferRef buffer) {
-    auto* self = static_cast<MacOSAudioOutput*>(user_data);
+    auto* self = static_cast<AudioOutput*>(user_data);
     if (!self) return;
 
     if (self->fill_cb_) {
@@ -113,6 +114,13 @@ void MacOSAudioOutput::audio_queue_callback(void* user_data, AudioQueueRef queue
     }
 
     AudioQueueEnqueueBuffer(queue, buffer, 0, nullptr);
+}
+
+void AudioOutput::set_volume(float vol) {
+    volume_ = vol;
+    if (queue_) {
+        AudioQueueSetParameter(queue_, kAudioQueueParam_Volume, volume_);
+    }
 }
 
 } // namespace rav

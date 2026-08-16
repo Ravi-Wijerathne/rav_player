@@ -1,5 +1,3 @@
-#if defined(__APPLE__)
-
 #include "MetalRenderer.h"
 #include "FrameConverter.h"
 #include "ShaderTypes.h"
@@ -10,6 +8,8 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/QuartzCore.h>
+#import <CoreVideo/CoreVideo.h>
+#import <CoreMedia/CoreMedia.h>
 
 namespace rav {
 
@@ -26,6 +26,7 @@ public:
     id<MTLBuffer> vertexBuffer270 = nil;
     CAMetalLayer* metalLayer = nil;
     dispatch_semaphore_t inflightSemaphore = nil;
+    CVMetalTextureCacheRef textureCache = nil;
 
     int width = 0;
     int height = 0;
@@ -81,6 +82,12 @@ public:
         }
 
         inflightSemaphore = dispatch_semaphore_create(3);
+        
+        CVReturn err = CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &textureCache);
+        if (err != kCVReturnSuccess) {
+            NSLog(@"MetalRenderer: CVMetalTextureCacheCreate failed");
+            return false;
+        }
 
         NSError* error = nil;
 
@@ -393,6 +400,10 @@ bool MetalRenderer::init() {
 
 void MetalRenderer::shutdown() {
     if (!impl_) return;
+    if (impl_->textureCache) {
+        CFRelease(impl_->textureCache);
+        impl_->textureCache = nil;
+    }
     impl_->frame_converter_.close();
     impl_->ready = false;
 }
@@ -410,10 +421,54 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
     bool isYUV = (frame.format == VideoFrameFormat::YUV420P ||
                   frame.format == VideoFrameFormat::NV12 ||
                   frame.format == VideoFrameFormat::YUV420P10);
+    bool isHardware = (frame.format == VideoFrameFormat::Hardware);
 
     static int diag = 0; if (++diag % 30 == 1)
-        NSLog(@"present_frame: w=%d h=%d fmt=%d isYUV=%d",
-              w, h, (int)frame.format, isYUV);
+        NSLog(@"present_frame: w=%d h=%d fmt=%d isYUV=%d isHW=%d",
+              w, h, (int)frame.format, isYUV, isHardware);
+
+    if (isHardware && frame.frame && impl_->yuvPipelineState) {
+        CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)frame.frame->data[3];
+        if (pixelBuffer) {
+            int pbWidth = (int)CVPixelBufferGetWidth(pixelBuffer);
+            int pbHeight = (int)CVPixelBufferGetHeight(pixelBuffer);
+            
+            OSType cvFormat = CVPixelBufferGetPixelFormatType(pixelBuffer);
+            MTLPixelFormat yFormat = MTLPixelFormatR8Unorm;
+            MTLPixelFormat uvFormat = MTLPixelFormatRG8Unorm;
+            
+            if (cvFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange || 
+                cvFormat == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange) {
+                yFormat = MTLPixelFormatR16Unorm;
+                uvFormat = MTLPixelFormatRG16Unorm;
+            }
+            
+            CVMetalTextureRef yTextureRef = NULL;
+            CVMetalTextureRef uvTextureRef = NULL;
+            
+            CVReturn cvErr = CVMetalTextureCacheCreateTextureFromImage(
+                kCFAllocatorDefault, impl_->textureCache, pixelBuffer, nil,
+                yFormat, pbWidth, pbHeight, 0, &yTextureRef);
+                
+            if (cvErr == kCVReturnSuccess) {
+                cvErr = CVMetalTextureCacheCreateTextureFromImage(
+                    kCFAllocatorDefault, impl_->textureCache, pixelBuffer, nil,
+                    uvFormat, pbWidth / 2, pbHeight / 2, 1, &uvTextureRef);
+                    
+                if (cvErr == kCVReturnSuccess) {
+                    id<MTLTexture> yTex = CVMetalTextureGetTexture(yTextureRef);
+                    id<MTLTexture> uvTex = CVMetalTextureGetTexture(uvTextureRef);
+                    
+                    impl_->renderYUV(yTex, uvTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
+                    
+                    CFRelease(uvTextureRef);
+                }
+                CFRelease(yTextureRef);
+                
+                if (cvErr == kCVReturnSuccess) return true;
+            }
+        }
+    }
 
     if (isYUV && frame.frame && impl_->yuvPipelineState) {
         int width = frame.frame->width;
@@ -544,5 +599,3 @@ void* MetalRenderer::layer() const {
 }
 
 } // namespace rav
-
-#endif // __APPLE__

@@ -11,6 +11,7 @@ struct PlayerView: View {
     @State private var showControls: Bool = true
     @State private var mouseTimer: Timer?
     @State private var showInfo: Bool = false
+    @State private var savedVolume: Float = 1.0
 
     var body: some View {
         ZStack {
@@ -331,13 +332,27 @@ struct PlayerView: View {
 
     private var volumeControl: some View {
         HStack(spacing: 6) {
-            Image(systemName: viewModel.volume > 0 ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                .font(.caption)
-                .foregroundColor(.gray)
+            Button(action: {
+                if viewModel.volume > 0 {
+                    if viewModel.volume > 0.05 { savedVolume = viewModel.volume }
+                    viewModel.setVolume(0)
+                } else {
+                    viewModel.setVolume(savedVolume > 0 ? savedVolume : 1.0)
+                }
+            }) {
+                Image(systemName: viewModel.volume > 0 ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
 
-            Slider(value: $viewModel.volume, in: 0...1, onEditingChanged: { _ in
-                viewModel.setVolume(viewModel.volume)
-            })
+            Slider(value: Binding(
+                get: { viewModel.volume },
+                set: { newValue in
+                    viewModel.setVolume(newValue)
+                    if newValue > 0 { savedVolume = newValue }
+                }
+            ), in: 0...1)
             .frame(width: 80)
             .accentColor(.white)
         }

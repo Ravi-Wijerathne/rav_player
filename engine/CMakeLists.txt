@@ -34,7 +34,7 @@ target_include_directories(rav_engine
 # For now we add their include paths so code can reference them.
 set(ENGINE_MODULES
     core media ffmpeg video audio subtitles streaming
-    playlist metadata plugins platform rendering decoder
+    playlist metadata plugins rendering decoder
 )
 
 foreach(module ${ENGINE_MODULES})
@@ -48,21 +48,19 @@ foreach(module ${ENGINE_MODULES})
     )
 endforeach()
 
-if(APPLE)
-    target_link_libraries(rav_engine PUBLIC
-        "-framework Metal"
-        "-framework QuartzCore"
-        "-framework Foundation"
-        "-framework AudioToolbox"
-    )
+target_link_libraries(rav_engine PUBLIC
+    "-framework Metal"
+    "-framework QuartzCore"
+    "-framework Foundation"
+    "-framework AudioToolbox"
+)
 
-    # Enable Obj-C++ for .mm files
-    set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/rendering/MetalRenderer.mm
-        PROPERTIES COMPILE_FLAGS "-ObjC++"
-    )
-    set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/platform/MacOSAudioOutput.mm
-        PROPERTIES COMPILE_FLAGS "-ObjC++"
-    )
-endif()
+# Enable Obj-C++ for .mm files
+set_source_files_properties(
+    ${CMAKE_CURRENT_SOURCE_DIR}/rendering/MetalRenderer.mm
+    PROPERTIES COMPILE_FLAGS "-ObjC++"
+)
+set_source_files_properties(
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio/AudioOutput.mm
+    PROPERTIES COMPILE_FLAGS "-ObjC++"
+)

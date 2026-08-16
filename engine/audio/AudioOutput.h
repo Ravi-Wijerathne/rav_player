@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <AudioToolbox/AudioToolbox.h>
 
 #include "AudioFrame.h"
 
@@ -18,23 +19,48 @@ struct AudioOutputSpec {
 class AudioOutput {
 public:
     using FillCallback = std::function<int(uint8_t*, int)>;
-    virtual void set_fill_callback(FillCallback) {}
 
-    virtual ~AudioOutput() = default;
+    AudioOutput() = default;
+    ~AudioOutput() { shutdown(); }
 
-    virtual bool init(const AudioOutputSpec& spec) = 0;
-    virtual void shutdown() = 0;
+    AudioOutput(const AudioOutput&) = delete;
+    AudioOutput& operator=(const AudioOutput&) = delete;
 
-    virtual bool play() = 0;
-    virtual bool pause() = 0;
-    virtual bool resume() = 0;
-    virtual bool stop() = 0;
+    bool init(const AudioOutputSpec& spec);
+    void shutdown();
 
-    virtual int write_frames(const uint8_t* data, int frames) = 0;
+    bool play();
+    bool pause();
+    bool resume();
+    bool stop();
 
-    virtual double latency() const = 0;
-    virtual bool is_playing() const = 0;
-    virtual bool is_initialized() const = 0;
+    int write_frames(const uint8_t* data, int frames) {
+        if (fill_cb_) {
+            return fill_cb_(const_cast<uint8_t*>(data), frames);
+        }
+        return frames;
+    }
+
+    double latency() const { return 0.05; }
+    bool is_playing() const { return playing_; }
+    bool is_initialized() const { return initialized_; }
+
+    void set_fill_callback(FillCallback cb) { fill_cb_ = std::move(cb); }
+
+    void set_volume(float vol);
+
+private:
+    static void audio_queue_callback(void* user_data, AudioQueueRef queue,
+                                     AudioQueueBufferRef buffer);
+
+    AudioQueueRef queue_{nullptr};
+    AudioQueueBufferRef buffers_[3]{};
+    AudioStreamBasicDescription asbd_{};
+    AudioOutputSpec spec_;
+    bool playing_{false};
+    bool initialized_{false};
+    float volume_{1.0f};
+    FillCallback fill_cb_;
 };
 
 } // namespace rav
