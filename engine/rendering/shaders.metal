@@ -117,3 +117,59 @@ yuvFragmentShader(RasterizerData in [[stage_in]],
 
     return float4(rgb, 1.0);
 }
+
+fragment float4
+yuvPlanarFragmentShader(RasterizerData in [[stage_in]],
+                        texture2d<float> y_texture [[texture(0)]],
+                        texture2d<float> u_texture [[texture(1)]],
+                        texture2d<float> v_texture [[texture(2)]],
+                        constant Uniforms &uniforms [[buffer(FragmentInputIndexUniforms)]]) {
+    constexpr sampler sam(min_filter::linear, mag_filter::linear, mip_filter::none);
+
+    float y = y_texture.sample(sam, in.texcoord).r;
+    float u = u_texture.sample(sam, in.texcoord).r;
+    float v = v_texture.sample(sam, in.texcoord).r;
+
+    if (uniforms.is_10bit != 0) {
+        float y_10bit = y * 65535.0;
+        float u_10bit = u * 65535.0;
+        float v_10bit = v * 65535.0;
+
+        y = (y_10bit - 64.0) / 876.0;
+        u = (u_10bit - 512.0) / 896.0;
+        v = (v_10bit - 512.0) / 896.0;
+    } else {
+        y = 1.1643 * (y - 0.0625);
+        u = u - 0.5;
+        v = v - 0.5;
+    }
+
+    float3 yuv = float3(y, u, v);
+    float3 rgb;
+
+    if (uniforms.is_bt2020 != 0) {
+        // BT.2020 Non-Constant Luminance Matrix
+        rgb = float3(
+            yuv.x + 1.4746 * yuv.z,
+            yuv.x - 0.16455 * yuv.y - 0.57135 * yuv.z,
+            yuv.x + 1.8814 * yuv.y
+        );
+    } else {
+        // BT.709 Matrix
+        rgb = float3(
+            yuv.x + 1.5958 * yuv.z,
+            yuv.x - 0.39173 * yuv.y - 0.81290 * yuv.z,
+            yuv.x + 2.017 * yuv.y
+        );
+    }
+
+    if (uniforms.is_hdr != 0) {
+        // Convert PQ transfer function to Linear
+        rgb = pq_to_linear(rgb);
+        // Scale to EDR (Extended Dynamic Range) where 1.0 = SDR white
+        rgb *= 100.0;
+    }
+
+    return float4(rgb, 1.0);
+}
+
