@@ -20,6 +20,7 @@ public:
     id<MTLLibrary> library = nil;
     id<MTLRenderPipelineState> pipelineState = nil;
     id<MTLRenderPipelineState> yuvPipelineState = nil;
+    id<MTLRenderPipelineState> yuvPlanarPipelineState = nil;
     id<MTLBuffer> vertexBuffer0 = nil;
     id<MTLBuffer> vertexBuffer90 = nil;
     id<MTLBuffer> vertexBuffer180 = nil;
@@ -125,6 +126,7 @@ public:
         auto* vertexFn = [library newFunctionWithName:@"vertexShader"];
         auto* fragmentFn = [library newFunctionWithName:@"fragmentShader"];
         auto* yuvFragmentFn = [library newFunctionWithName:@"yuvFragmentShader"];
+        auto* yuvPlanarFragmentFn = [library newFunctionWithName:@"yuvPlanarFragmentShader"];
 
         if (!vertexFn) {
             NSLog(@"MetalRenderer: vertexShader function not found in library");
@@ -158,6 +160,20 @@ public:
             yuvPipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&error];
             if (!yuvPipelineState) {
                 NSLog(@"MetalRenderer: YUV pipeline error: %@", error.localizedDescription);
+            }
+        }
+
+        if (yuvPlanarFragmentFn) {
+            MTLRenderPipelineDescriptor* desc = [MTLRenderPipelineDescriptor new];
+            desc.label = @"YUV Planar Pipeline";
+            desc.vertexFunction = vertexFn;
+            desc.fragmentFunction = yuvPlanarFragmentFn;
+            desc.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA16Float;
+
+            NSError* error = nil;
+            yuvPlanarPipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+            if (!yuvPlanarPipelineState) {
+                NSLog(@"MetalRenderer: YUV planar pipeline error: %@", error.localizedDescription);
             }
         }
 
@@ -280,6 +296,91 @@ public:
                               atIndex:FragmentInputIndexUniforms];
             [encoder setFragmentTexture:yTexture atIndex:0];
             [encoder setFragmentTexture:uvTexture atIndex:1];
+
+            [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                        vertexStart:0 vertexCount:4];
+
+            [encoder endEncoding];
+            [cmdBuffer presentDrawable:drawable];
+            [cmdBuffer commit];
+        }
+    }
+
+    void renderPlanarYUV(id<MTLTexture> yTexture, id<MTLTexture> uTexture, id<MTLTexture> vTexture, int rotation, bool isHDR, bool is10Bit, bool isBT2020) {
+        if (!ready || !metalLayer || !yTexture || !uTexture || !vTexture) {
+            static int once = 0; if (++once == 1) NSLog(@"renderPlanarYUV: early return");
+            return;
+        }
+        id<MTLRenderPipelineState> ps = yuvPlanarPipelineState;
+        if (!ps) { static int once = 0; if (++once == 1) NSLog(@"renderPlanarYUV: no pipeline"); return; }
+
+        if (isHDR) {
+            static CGColorSpaceRef hdrSpace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
+            if (metalLayer.colorspace != hdrSpace) {
+                metalLayer.colorspace = hdrSpace;
+            }
+        } else {
+            static CGColorSpaceRef sdrSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+            if (metalLayer.colorspace != sdrSpace) {
+                metalLayer.colorspace = sdrSpace;
+            }
+        }
+
+        dispatch_semaphore_wait(inflightSemaphore, DISPATCH_TIME_FOREVER);
+
+        @autoreleasepool {
+            id<MTLCommandBuffer> cmdBuffer = [commandQueue commandBuffer];
+            if (!cmdBuffer) {
+                dispatch_semaphore_signal(inflightSemaphore);
+                return;
+            }
+
+            __block dispatch_semaphore_t sema = inflightSemaphore;
+            [cmdBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+                dispatch_semaphore_signal(sema);
+            }];
+
+            id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
+            if (!drawable) {
+                static int once = 0; if (++once == 1) NSLog(@"renderPlanarYUV: nextDrawable returned nil");
+                [cmdBuffer commit];
+                return;
+            }
+
+            MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+            passDesc.colorAttachments[0].texture = drawable.texture;
+            passDesc.colorAttachments[0].loadAction = MTLLoadActionClear;
+            passDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
+            passDesc.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
+
+            id<MTLRenderCommandEncoder> encoder =
+                [cmdBuffer renderCommandEncoderWithDescriptor:passDesc];
+            if (!encoder) {
+                [cmdBuffer commit];
+                return;
+            }
+
+            encoder.label = @"Present Planar YUV Frame";
+            [encoder setViewport:(MTLViewport){
+                0.0, 0.0, (double)width, (double)height, 0.0, 1.0
+            }];
+
+            [encoder setRenderPipelineState:ps];
+            id<MTLBuffer> vBuf = vertexBuffer0;
+            if (rotation == 90) vBuf = vertexBuffer90;
+            else if (rotation == 180) vBuf = vertexBuffer180;
+            else if (rotation == 270) vBuf = vertexBuffer270;
+            [encoder setVertexBuffer:vBuf offset:0 atIndex:0];
+
+            Uniforms uniforms;
+            uniforms.is_hdr = isHDR ? 1 : 0;
+            uniforms.is_10bit = is10Bit ? 1 : 0;
+            uniforms.is_bt2020 = isBT2020 ? 1 : 0;
+            [encoder setFragmentBytes:&uniforms length:sizeof(uniforms)
+                              atIndex:FragmentInputIndexUniforms];
+            [encoder setFragmentTexture:yTexture atIndex:0];
+            [encoder setFragmentTexture:uTexture atIndex:1];
+            [encoder setFragmentTexture:vTexture atIndex:2];
 
             [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                         vertexStart:0 vertexCount:4];
@@ -484,24 +585,21 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                       withBytes:frame.frame->data[0]
                     bytesPerRow:frame.frame->linesize[0]];
             
-            id<MTLTexture> uvTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatRG16Unorm);
-            if (!uvTex) return false;
-            
-            std::vector<uint16_t> uvInterleaved(uv_w * uv_h * 2);
-            for (int row = 0; row < uv_h; ++row) {
-                const uint16_t* uRow = (const uint16_t*)(frame.frame->data[1] + row * frame.frame->linesize[1]);
-                const uint16_t* vRow = (const uint16_t*)(frame.frame->data[2] + row * frame.frame->linesize[2]);
-                uint16_t* dst = uvInterleaved.data() + row * uv_w * 2;
-                for (int col = 0; col < uv_w; ++col) {
-                    dst[col * 2]     = uRow[col];
-                    dst[col * 2 + 1] = vRow[col];
-                }
-            }
-            [uvTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
-                     mipmapLevel:0
-                       withBytes:uvInterleaved.data()
-                     bytesPerRow:uv_w * 4];
-            impl_->renderYUV(yTex, uvTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
+            id<MTLTexture> uTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR16Unorm);
+            if (!uTex) return false;
+            [uTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
+                    mipmapLevel:0
+                      withBytes:frame.frame->data[1]
+                    bytesPerRow:frame.frame->linesize[1]];
+
+            id<MTLTexture> vTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR16Unorm);
+            if (!vTex) return false;
+            [vTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
+                    mipmapLevel:0
+                      withBytes:frame.frame->data[2]
+                    bytesPerRow:frame.frame->linesize[2]];
+
+            impl_->renderPlanarYUV(yTex, uTex, vTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
             return true;
         }
 
@@ -512,33 +610,32 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                   withBytes:frame.frame->data[0]
                 bytesPerRow:frame.frame->linesize[0]];
 
-        id<MTLTexture> uvTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatRG8Unorm);
-        if (!uvTex) return false;
-
         if (frame.format == VideoFrameFormat::NV12) {
+            id<MTLTexture> uvTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatRG8Unorm);
+            if (!uvTex) return false;
             [uvTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
                      mipmapLevel:0
                        withBytes:frame.frame->data[1]
                      bytesPerRow:frame.frame->linesize[1]];
+            impl_->renderYUV(yTex, uvTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
         } else {
-            // YUV420P: interleave separate U+V planes into RG8
-            std::vector<uint8_t> uvInterleaved(uv_w * uv_h * 2);
-            for (int row = 0; row < uv_h; ++row) {
-                const uint8_t* uRow = frame.frame->data[1] + row * frame.frame->linesize[1];
-                const uint8_t* vRow = frame.frame->data[2] + row * frame.frame->linesize[2];
-                uint8_t* dst = uvInterleaved.data() + row * uv_w * 2;
-                for (int col = 0; col < uv_w; ++col) {
-                    dst[col * 2]     = uRow[col];
-                    dst[col * 2 + 1] = vRow[col];
-                }
-            }
-            [uvTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
-                     mipmapLevel:0
-                       withBytes:uvInterleaved.data()
-                     bytesPerRow:uv_w * 2];
-        }
+            // YUV420P: 3 separate planar textures
+            id<MTLTexture> uTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR8Unorm);
+            if (!uTex) return false;
+            [uTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
+                    mipmapLevel:0
+                      withBytes:frame.frame->data[1]
+                    bytesPerRow:frame.frame->linesize[1]];
 
-        impl_->renderYUV(yTex, uvTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
+            id<MTLTexture> vTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR8Unorm);
+            if (!vTex) return false;
+            [vTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
+                    mipmapLevel:0
+                      withBytes:frame.frame->data[2]
+                    bytesPerRow:frame.frame->linesize[2]];
+
+            impl_->renderPlanarYUV(yTex, uTex, vTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
+        }
         return true;
     }
 
