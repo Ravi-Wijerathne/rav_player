@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cmake ffmpeg
+
+      - name: Build Application
+        run: |
+          chmod +x ./platform/macos/build.sh
+          ./platform/macos/build.sh
+
+      - name: Archive Application
+        run: |
+          cd platform/macos
+          zip -r rav_player.zip rav_player.app
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: platform/macos/rav_player.zip
+          generate_release_notes: true
