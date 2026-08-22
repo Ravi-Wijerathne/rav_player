@@ -98,6 +98,24 @@ xcrun swiftc \
 if command -v dylibbundler &> /dev/null; then
     echo "Bundling dynamic libraries with dylibbundler..."
     dylibbundler -od -b -x "$APP_DIR/Contents/MacOS/rav_player" -d "$APP_DIR/Contents/Frameworks/" -p "@executable_path/../Frameworks/"
+    
+    echo "Fixing duplicate RPATHs added by dylibbundler..."
+    # Remove all instances of the RPATH
+    while install_name_tool -delete_rpath "@executable_path/../Frameworks/" "$APP_DIR/Contents/MacOS/rav_player" 2>/dev/null; do
+        true
+    done
+    # Add it exactly once
+    install_name_tool -add_rpath "@executable_path/../Frameworks/" "$APP_DIR/Contents/MacOS/rav_player"
+    
+    # Do the same for bundled libraries to prevent any crashes from them
+    for lib in "$APP_DIR/Contents/Frameworks/"*.dylib; do
+        if [ -f "$lib" ]; then
+            while install_name_tool -delete_rpath "@executable_path/../Frameworks/" "$lib" 2>/dev/null; do
+                true
+            done
+            install_name_tool -add_rpath "@executable_path/../Frameworks/" "$lib" 2>/dev/null || true
+        fi
+    done
 else
     echo "dylibbundler not found, skipping library bundling. (run 'brew install dylibbundler' to fix)"
 fi
