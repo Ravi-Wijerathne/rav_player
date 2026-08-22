@@ -15,7 +15,7 @@ FFMPEG_DIR="$HOMEBREW_PREFIX"
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="$ROOT_DIR/build"
-APP_DIR="$ROOT_DIR/platform/macos/rav_player.app"
+APP_DIR="$ROOT_DIR/platform/macos/Rav Player.app"
 
 echo "=== Building Engine ==="
 cmake -B "$BUILD_DIR" -S "$ROOT_DIR" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=OFF
