@@ -36,6 +36,8 @@ public:
     FrameConverter frame_converter_;
 
     struct TextureBuffer {
+        int plane = 0;
+        int slot = 0;
         id<MTLTexture> texture = nil;
         int width = 0;
         int height = 0;
@@ -44,10 +46,11 @@ public:
 
     std::vector<TextureBuffer> texture_pool_;
     int current_texture_index_ = 0;
+    int current_frame_slot_ = 0;
 
-    id<MTLTexture> acquireTexture(int width, int height, MTLPixelFormat format) {
+    id<MTLTexture> acquireTexture(int width, int height, MTLPixelFormat format, int plane, int slot) {
         for (auto& buf : texture_pool_) {
-            if (buf.width == width && buf.height == height && buf.format == format) {
+            if (buf.width == width && buf.height == height && buf.format == format && buf.plane == plane && buf.slot == slot) {
                 return buf.texture;
             }
         }
@@ -60,11 +63,11 @@ public:
         id<MTLTexture> texture = [device newTextureWithDescriptor:desc];
         if (!texture) return nil;
 
-        if (texture_pool_.size() < 3) {
-            texture_pool_.push_back({texture, width, height, format});
+        if (texture_pool_.size() < 30) {
+            texture_pool_.push_back(TextureBuffer{plane, slot, texture, width, height, format});
         } else {
-            texture_pool_[current_texture_index_] = {texture, width, height, format};
-            current_texture_index_ = (current_texture_index_ + 1) % 3;
+            texture_pool_[current_texture_index_] = TextureBuffer{plane, slot, texture, width, height, format};
+            current_texture_index_ = (current_texture_index_ + 1) % 30;
         }
         return texture;
     }
@@ -510,6 +513,7 @@ void MetalRenderer::shutdown() {
 }
 
 bool MetalRenderer::present_frame(const VideoFrame& frame) {
+    impl_->current_frame_slot_ = (impl_->current_frame_slot_ + 1) % 3;
     if (!impl_->ready) {
         static int once = 0; if (++once == 1) NSLog(@"MetalRenderer::present_frame: not ready");
         return false;
@@ -578,21 +582,21 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
         int uv_h = height / 2;
 
         if (frame.format == VideoFrameFormat::YUV420P10) {
-            id<MTLTexture> yTex = impl_->acquireTexture(width, height, MTLPixelFormatR16Unorm);
+            id<MTLTexture> yTex = impl_->acquireTexture(width, height, MTLPixelFormatR16Unorm, 0, impl_->current_frame_slot_);
             if (!yTex) return false;
             [yTex replaceRegion:MTLRegionMake2D(0, 0, width, height)
                     mipmapLevel:0
                       withBytes:frame.frame->data[0]
                     bytesPerRow:frame.frame->linesize[0]];
             
-            id<MTLTexture> uTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR16Unorm);
+            id<MTLTexture> uTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR16Unorm, 1, impl_->current_frame_slot_);
             if (!uTex) return false;
             [uTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
                     mipmapLevel:0
                       withBytes:frame.frame->data[1]
                     bytesPerRow:frame.frame->linesize[1]];
 
-            id<MTLTexture> vTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR16Unorm);
+            id<MTLTexture> vTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR16Unorm, 2, impl_->current_frame_slot_);
             if (!vTex) return false;
             [vTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
                     mipmapLevel:0
@@ -603,7 +607,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
             return true;
         }
 
-        id<MTLTexture> yTex = impl_->acquireTexture(width, height, MTLPixelFormatR8Unorm);
+        id<MTLTexture> yTex = impl_->acquireTexture(width, height, MTLPixelFormatR8Unorm, 0, impl_->current_frame_slot_);
         if (!yTex) return false;
         [yTex replaceRegion:MTLRegionMake2D(0, 0, width, height)
                 mipmapLevel:0
@@ -611,7 +615,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
                 bytesPerRow:frame.frame->linesize[0]];
 
         if (frame.format == VideoFrameFormat::NV12) {
-            id<MTLTexture> uvTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatRG8Unorm);
+            id<MTLTexture> uvTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatRG8Unorm, 1, impl_->current_frame_slot_);
             if (!uvTex) return false;
             [uvTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
                      mipmapLevel:0
@@ -620,14 +624,14 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
             impl_->renderYUV(yTex, uvTex, frame.rotation, frame.is_hdr, frame.is_10bit, frame.is_bt2020);
         } else {
             // YUV420P: 3 separate planar textures
-            id<MTLTexture> uTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR8Unorm);
+            id<MTLTexture> uTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR8Unorm, 1, impl_->current_frame_slot_);
             if (!uTex) return false;
             [uTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
                     mipmapLevel:0
                       withBytes:frame.frame->data[1]
                     bytesPerRow:frame.frame->linesize[1]];
 
-            id<MTLTexture> vTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR8Unorm);
+            id<MTLTexture> vTex = impl_->acquireTexture(uv_w, uv_h, MTLPixelFormatR8Unorm, 2, impl_->current_frame_slot_);
             if (!vTex) return false;
             [vTex replaceRegion:MTLRegionMake2D(0, 0, uv_w, uv_h)
                     mipmapLevel:0
@@ -659,7 +663,7 @@ bool MetalRenderer::present_frame(const VideoFrame& frame) {
 
     if (!impl_->frame_converter_.convert_to_buffer(frame.frame.get())) return false;
 
-    id<MTLTexture> texture = impl_->acquireTexture(w, h, MTLPixelFormatRGBA8Unorm);
+    id<MTLTexture> texture = impl_->acquireTexture(w, h, MTLPixelFormatRGBA8Unorm, 0, impl_->current_frame_slot_);
     if (!texture) return false;
 
     MTLRegion region = MTLRegionMake2D(0, 0, w, h);

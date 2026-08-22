@@ -1,6 +1,6 @@
-# RavPlayer
+# Rav Player
 
-RavPlayer is a professional-grade, native media player designed exclusively for macOS. It is built to play virtually any media format while delivering a fully native user experience, taking full advantage of macOS-specific frameworks and hardware acceleration.
+Rav Player is a professional-grade, native media player designed exclusively for macOS. It is built to play virtually any media format while delivering a fully native user experience, taking full advantage of macOS-specific frameworks and hardware acceleration.
 
 ### Project Goals & Architecture
 - **Dedicated Playback Engine:** Core playback logic, demuxing, decoding, synchronization, and streaming capabilities are written in C++20 for high performance.
@@ -50,11 +50,11 @@ Run the build script from the root directory:
 ```
 
 ### Step 2: Launch the Application
-Once the build is complete, you can find the application bundle at `platform/macos/rav_player.app`. Launch it using the terminal:
+Once the build is complete, you can find the application bundle at `platform/macos/Rav Player.app`. Launch it using the terminal:
 ```bash
-open platform/macos/rav_player.app
+open "platform/macos/Rav Player.app"
 ```
-Alternatively, double-click the `rav_player.app` file in Finder.
+Alternatively, double-click the `Rav Player.app` file in Finder.
 
 ---
 
@@ -70,7 +70,7 @@ To bypass this and run the app safely, you must remove the quarantine attribute 
 2. Open Terminal.
 3. Run the following command (assuming the app is in your Downloads folder):
    ```bash
-   xattr -cr ~/Downloads/rav_player.app
+   xattr -cr ~/Downloads/"Rav Player.app"
    ```
 4. You can now double-click and open the application normally!
 
@@ -84,7 +84,7 @@ To inspect runtime logs, diagnose issues, or view crash reports:
 
 1. **Run directly from terminal (Live `NSLog` & console output):**
    ```bash
-   ./platform/macos/rav_player.app/Contents/MacOS/rav_player
+   "./platform/macos/Rav Player.app/Contents/MacOS/rav_player"
    ```
 2. **Stream macOS system logs in real time:**
    ```bash
@@ -99,7 +99,7 @@ To inspect runtime logs, diagnose issues, or view crash reports:
 
 ## Running Tests
 
-RavPlayer uses **Google Test** for unit and integration testing. To build and execute the tests, follow these steps:
+Rav Player uses **Google Test** for unit and integration testing. To build and execute the tests, follow these steps:
 
 1. Configure CMake with tests enabled:
    ```bash

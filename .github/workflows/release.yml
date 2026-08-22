@@ -30,7 +30,7 @@ jobs:
       - name: Archive Application
         run: |
           cd platform/macos
-          zip -r rav_player.zip rav_player.app
+          zip -r rav_player.zip "Rav Player.app"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
