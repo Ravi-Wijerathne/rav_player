@@ -58,6 +58,26 @@ Alternatively, double-click the `rav_player.app` file in Finder.
 
 ---
 
+## Downloading from Releases
+
+You can download pre-built versions of the application from the [GitHub Releases](../../releases) page. 
+
+Because this application is not currently code-signed with an Apple Developer account, macOS Gatekeeper will flag it with the "App is damaged and can't be opened" warning when you download it from the internet. 
+
+To bypass this and run the app safely, you must remove the quarantine attribute using your terminal:
+
+1. Download and unzip the release (`rav_player.zip`).
+2. Open Terminal.
+3. Run the following command (assuming the app is in your Downloads folder):
+   ```bash
+   xattr -cr ~/Downloads/rav_player.app
+   ```
+4. You can now double-click and open the application normally!
+
+*(Note: The FFmpeg dynamic libraries are pre-bundled inside the release, so you do not need Homebrew or FFmpeg installed to run the downloaded version).*
+
+---
+
 ## Debugging & Logs
 
 To inspect runtime logs, diagnose issues, or view crash reports:
