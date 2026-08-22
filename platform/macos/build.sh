@@ -132,4 +132,7 @@ if [ -n "${CODESIGN_IDENTITY}" ]; then
         --options=runtime \
         --sign "$CODESIGN_IDENTITY" \
         "$APP_DIR"
+else
+    echo "No CODESIGN_IDENTITY provided. Applying an ad-hoc signature to prevent 'App is damaged' errors on Apple Silicon..."
+    codesign --force --deep --sign - "$APP_DIR"
 fi
