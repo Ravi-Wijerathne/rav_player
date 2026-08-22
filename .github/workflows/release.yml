@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           brew update
-          brew install cmake ffmpeg
+          brew install cmake ffmpeg dylibbundler
 
       - name: Build Application
         run: |

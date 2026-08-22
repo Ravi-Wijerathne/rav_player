@@ -95,6 +95,13 @@ xcrun swiftc \
     -o "$APP_DIR/Contents/MacOS/rav_player" \
     2>&1
 
+if command -v dylibbundler &> /dev/null; then
+    echo "Bundling dynamic libraries with dylibbundler..."
+    dylibbundler -od -b -x "$APP_DIR/Contents/MacOS/rav_player" -d "$APP_DIR/Contents/Frameworks/" -p "@executable_path/../Frameworks/"
+else
+    echo "dylibbundler not found, skipping library bundling. (run 'brew install dylibbundler' to fix)"
+fi
+
 echo ""
 echo "=== Build Complete ==="
 echo "App bundle: $APP_DIR"
@@ -106,5 +113,5 @@ if [ -n "${CODESIGN_IDENTITY}" ]; then
     codesign --deep --force --verify --timestamp \
         --options=runtime \
         --sign "$CODESIGN_IDENTITY" \
-        "$APP_DIR/RavPlayer.app"
+        "$APP_DIR"
 fi
